@@ -1,4 +1,9 @@
-import { getDomains, type DomainListStatus } from "@/lib/get-data";
+import {
+  getDomains,
+  type DomainList,
+  type DomainListItem,
+  type DomainListStatus,
+} from "@/lib/get-data";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -28,7 +33,7 @@ export default async function Design3() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const domains = await getDomains(session.user.id);
+  const domains: DomainList = await getDomains(session.user.id);
 
   return (
     <main className="min-h-screen bg-black font-mono text-white">
@@ -43,7 +48,7 @@ export default async function Design3() {
           <div className="text-right text-[10px] uppercase tracking-widest text-zinc-700">
             <p>{domains.length} entries</p>
             <p className="mt-1">
-              {domains.filter((domain) => domain.status === "DRIFTING").length}{" "}
+              {domains.filter((domain: DomainListItem) => domain.status === "DRIFTING").length}{" "}
               drifting
             </p>
           </div>
@@ -60,7 +65,7 @@ export default async function Design3() {
       </div>
 
       <div>
-        {domains.map((domain, index) => {
+        {domains.map((domain: DomainListItem, index: number) => {
           const status = domain.status;
           const itemIndex = String(index + 1).padStart(2, "0");
 

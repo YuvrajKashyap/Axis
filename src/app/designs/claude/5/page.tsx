@@ -1,11 +1,14 @@
-import { getDomains } from "@/lib/get-data";
+import {
+  getDomains,
+  type DomainList,
+  type DomainListItem,
+  type DomainListStatus,
+} from "@/lib/get-data";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-type DomainStatus = "ALIGNED" | "NEUTRAL" | "DRIFTING";
-
-const stampConfig: Record<DomainStatus, { label: string; cls: string; border: string }> = {
+const stampConfig: Record<DomainListStatus, { label: string; cls: string; border: string }> = {
   ALIGNED: {
     label: "ALIGNED",
     cls: "text-white border-white/50",
@@ -20,6 +23,11 @@ const stampConfig: Record<DomainStatus, { label: string; cls: string; border: st
     label: "DRIFTING",
     cls: "text-red-400 border-red-500/60",
     border: "border-l-red-500/20",
+  },
+  ARCHIVED: {
+    label: "ARCHIVED",
+    cls: "text-zinc-500 border-zinc-500/50",
+    border: "border-l-zinc-500/20",
   },
 };
 
@@ -36,7 +44,7 @@ export default async function Design5() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const domains = await getDomains(session.user.id);
+  const domains: DomainList = await getDomains(session.user.id);
 
   const caseYear = new Date().getFullYear();
 
@@ -59,14 +67,14 @@ export default async function Design5() {
 
         {/* Case files */}
         <div className="space-y-8">
-          {domains.map((d, i) => {
-            const status = d.status as DomainStatus;
+          {domains.map((domain: DomainListItem, index: number) => {
+            const status = domain.status;
             const cfg = stampConfig[status];
-            const caseNum = `CASE-${String(i + 1).padStart(3, "0")}-${caseYear}`;
+            const caseNum = `CASE-${String(index + 1).padStart(3, "0")}-${caseYear}`;
 
             return (
               <div
-                key={d.id}
+                key={domain.id}
                 className={`relative border border-zinc-800 border-l-4 ${cfg.border} bg-zinc-950 hover:bg-black transition-colors group`}
               >
                 {/* Case file top bar */}
@@ -76,7 +84,7 @@ export default async function Design5() {
                       {caseNum}
                     </p>
                     <h2 className="text-2xl md:text-3xl font-light tracking-tight text-white">
-                      {d.name}
+                      {domain.name}
                     </h2>
                   </div>
 
@@ -90,54 +98,54 @@ export default async function Design5() {
                 {/* Case body */}
                 <div className="px-7 py-6 space-y-6">
                   {/* Identity */}
-                  {d.identity && (
+                  {domain.identity && (
                     <div>
                       <p className="text-[10px] font-mono tracking-[0.4em] uppercase text-zinc-700 mb-2">
                         SUBJECT DECLARATION
                       </p>
                       <p className="text-base text-zinc-300 leading-relaxed font-light">
-                        &ldquo;{d.identity}&rdquo;
+                        &ldquo;{domain.identity}&rdquo;
                       </p>
                     </div>
                   )}
 
                   {/* Two-column detail */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                    {d.primaryReason && (
+                    {domain.primaryReason && (
                       <div>
                         <p className="text-[10px] font-mono tracking-[0.4em] uppercase text-zinc-700 mb-2">
                           REASON FOR CASE
                         </p>
                         <p className="text-sm text-zinc-500 leading-relaxed">
-                          {d.primaryReason}
+                          {domain.primaryReason}
                         </p>
                       </div>
                     )}
-                    {d.primaryCost && (
+                    {domain.primaryCost && (
                       <div>
                         <p className="text-[10px] font-mono tracking-[0.4em] uppercase text-zinc-700 mb-2">
                           COST OF INACTION
                         </p>
                         <p className="text-sm text-zinc-500 leading-relaxed">
-                          {d.primaryCost}
+                          {domain.primaryCost}
                         </p>
                       </div>
                     )}
                   </div>
 
                   {/* Recommended action */}
-                  {d.nextMove && (
+                  {domain.nextMove && (
                     <div className="border-t border-zinc-800/60 pt-5 flex items-start justify-between gap-4">
                       <div>
                         <p className="text-[10px] font-mono tracking-[0.4em] uppercase text-zinc-700 mb-2">
                           RECOMMENDED ACTION
                         </p>
                         <p className="text-sm text-zinc-300 leading-relaxed">
-                          {d.nextMove}
+                          {domain.nextMove}
                         </p>
                       </div>
                       <Link
-                        href={`/domain/${d.slug}`}
+                        href={`/domain/${domain.slug}`}
                         className="shrink-0 self-end text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-600 hover:text-white transition-colors border border-zinc-800 hover:border-zinc-600 px-4 py-2.5 group-hover:border-zinc-700"
                       >
                         OPEN →

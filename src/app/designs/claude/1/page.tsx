@@ -1,4 +1,9 @@
-import { getDomains, type DomainListStatus } from "@/lib/get-data";
+import {
+  getDomains,
+  type DomainList,
+  type DomainListItem,
+  type DomainListStatus,
+} from "@/lib/get-data";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -40,7 +45,7 @@ export default async function Design1() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const domains = await getDomains(session.user.id);
+  const domains: DomainList = await getDomains(session.user.id);
 
   // Assign fallback positions by index if missing
   const fallbackX = [2, -1, 0];
@@ -88,19 +93,19 @@ export default async function Design1() {
       </div>
 
       {/* Domain nodes */}
-      {domains.map((d, i) => {
-        const px = d.positionX ?? fallbackX[i] ?? 0;
-        const py = d.positionY ?? fallbackY[i] ?? 0;
-        const status = d.status;
+      {domains.map((domain: DomainListItem, index: number) => {
+        const px = domain.positionX ?? fallbackX[index] ?? 0;
+        const py = domain.positionY ?? fallbackY[index] ?? 0;
+        const status = domain.status;
 
         // Flip Y so positive is "up" on screen
         const left = toPercent(px);
         const top = toPercent(-py);
 
         return (
-          <Link
-            key={d.id}
-            href={`/domain/${d.slug}`}
+            <Link
+            key={domain.id}
+            href={`/domain/${domain.slug}`}
             className="group absolute -translate-x-1/2 -translate-y-1/2 z-10"
             style={{ left, top }}
           >
@@ -121,17 +126,17 @@ export default async function Design1() {
             {/* Label — always visible */}
             <div className="absolute left-8 top-1/2 -translate-y-1/2 whitespace-nowrap pointer-events-none">
               <p className="text-sm font-light text-white group-hover:text-zinc-200 transition-colors">
-                {d.name}
+                {domain.name}
               </p>
               <p className={`text-[10px] font-mono uppercase tracking-widest ${statusText[status]} mt-0.5`}>
-                {d.status}
+                {domain.status}
               </p>
             </div>
 
             {/* Identity — fades in on hover */}
             <div className="absolute -top-14 left-1/2 -translate-x-1/2 w-48 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none text-center">
               <p className="text-[11px] text-zinc-500 leading-relaxed">
-                {d.identity}
+                {domain.identity}
               </p>
             </div>
           </Link>

@@ -1,4 +1,9 @@
-import { getDomains, type DomainListStatus } from "@/lib/get-data";
+import {
+  getDomains,
+  type DomainList,
+  type DomainListItem,
+  type DomainListStatus,
+} from "@/lib/get-data";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -26,7 +31,7 @@ export default async function Design2() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const domains = await getDomains(session.user.id);
+  const domains: DomainList = await getDomains(session.user.id);
 
   const now = new Date();
   const timeCode = now.toISOString().slice(0, 19).replace("T", " ");
@@ -50,7 +55,7 @@ export default async function Design2() {
         </div>
       </header>
 
-      {domains.map((domain, index) => {
+      {domains.map((domain: DomainListItem, index: number) => {
         const status = domain.status;
         const indicator = statusIndicator[status];
         const itemIndex = String(index + 1).padStart(2, "0");

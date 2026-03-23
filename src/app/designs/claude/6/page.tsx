@@ -1,10 +1,13 @@
-import { getDomains } from "@/lib/get-data";
+import {
+  getDomains,
+  type DomainList,
+  type DomainListItem,
+  type DomainListStatus,
+} from "@/lib/get-data";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import "./orrery.css";
-
-type DomainStatus = "ALIGNED" | "NEUTRAL" | "DRIFTING";
 
 // Design 6: The Orrery
 // A 2D CSS solar system. AXIS is the sun. Domains orbit as planets.
@@ -30,7 +33,7 @@ const ORBITS: OrbitalConfig[] = [
   { radius: 248, armClass: "orbit-arm-gamma", counterClass: "counter-gamma", ringClass: "ring-gamma" },
 ];
 
-const STATUS_PLANET: Record<DomainStatus, { color: string; glow: string; ringColor: string; dotSize: number }> = {
+const STATUS_PLANET: Record<DomainListStatus, { color: string; glow: string; ringColor: string; dotSize: number }> = {
   ALIGNED: {
     color: "#ffffff",
     glow: "0 0 12px rgba(255,255,255,0.8), 0 0 28px rgba(255,255,255,0.4), 0 0 56px rgba(255,255,255,0.1)",
@@ -49,6 +52,12 @@ const STATUS_PLANET: Record<DomainStatus, { color: string; glow: string; ringCol
     ringColor: "rgba(248,113,113,0.08)",
     dotSize: 8,
   },
+  ARCHIVED: {
+    color: "#71717a",
+    glow: "0 0 8px rgba(113,113,122,0.5), 0 0 18px rgba(113,113,122,0.2)",
+    ringColor: "rgba(113,113,122,0.08)",
+    dotSize: 7,
+  },
 };
 
 // Container dimensions — the orrery lives inside this box
@@ -59,7 +68,7 @@ export default async function Design6() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const domains = await getDomains(session.user.id);
+  const domains: DomainList = await getDomains(session.user.id);
 
   return (
     <main className="min-h-screen bg-black text-white flex flex-col">
@@ -92,9 +101,9 @@ export default async function Design6() {
           {/* Orbit rings */}
           {ORBITS.map((orb, i) => {
             const diameter = orb.radius * 2;
-            const domain = domains[i];
+            const domain: DomainListItem | undefined = domains[i];
             if (!domain) return null;
-            const status = domain.status as DomainStatus;
+            const status = domain.status;
             const cfg = STATUS_PLANET[status];
 
             return (
@@ -148,10 +157,10 @@ export default async function Design6() {
 
           {/* Planets — orbit arm technique */}
           {ORBITS.map((orb, i) => {
-            const domain = domains[i];
+            const domain: DomainListItem | undefined = domains[i];
             if (!domain) return null;
 
-            const status = domain.status as DomainStatus;
+            const status = domain.status;
             const cfg = STATUS_PLANET[status];
             const dotSize = cfg.dotSize;
 
@@ -228,14 +237,14 @@ export default async function Design6() {
         {/* Domain list below the system — for accessibility + usability */}
         <div className="mt-16 w-full max-w-sm">
           <div className="border-t border-zinc-900">
-            {domains.map((d) => {
-              const status = d.status as DomainStatus;
+            {domains.map((domain: DomainListItem) => {
+              const status = domain.status;
               const cfg = STATUS_PLANET[status];
 
               return (
                 <Link
-                  key={d.id}
-                  href={`/domain/${d.slug}`}
+                  key={domain.id}
+                  href={`/domain/${domain.slug}`}
                   className="group flex items-center justify-between border-b border-zinc-900 py-4 hover:border-zinc-700 transition-colors"
                 >
                   <div className="flex items-center gap-4">
@@ -244,14 +253,14 @@ export default async function Design6() {
                       style={{ backgroundColor: cfg.color, boxShadow: cfg.glow }}
                     />
                     <span className="text-sm font-light text-zinc-400 group-hover:text-white transition-colors">
-                      {d.name}
+                      {domain.name}
                     </span>
                   </div>
                   <span
                     className="text-[10px] font-mono tracking-widest uppercase"
                     style={{ color: cfg.color, opacity: 0.7 }}
                   >
-                    {d.status}
+                    {domain.status}
                   </span>
                 </Link>
               );
