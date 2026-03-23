@@ -213,6 +213,8 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
 
   const containerRef = useRef<HTMLDivElement>(null);
   const armRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const moverRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const counterRefs = useRef<(HTMLDivElement | null)[]>([]);
   const ringRefs = useRef<(HTMLDivElement | null)[]>([]);
   const anglesRef = useRef<number[]>(
     domains.map((_: DomainData, i: number) => getInitialAngle(i)),
@@ -257,6 +259,37 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
     const obs = new ResizeObserver(measure);
     obs.observe(el);
     return () => obs.disconnect();
+  }, []);
+
+  const setPlanetTransforms = useCallback((index: number, radius: number, angle: number) => {
+    const pxR = radius * (sizeRef.current / 2);
+
+    const arm = armRefs.current[index];
+    if (arm) {
+      arm.style.transform = `rotate(${angle}rad)`;
+    }
+
+    const mover = moverRefs.current[index];
+    if (mover) {
+      mover.style.transform = `translate3d(${pxR}px, 0, 0)`;
+    }
+
+    const counter = counterRefs.current[index];
+    if (counter) {
+      counter.style.transform = `rotate(${-angle}rad)`;
+    }
+  }, []);
+
+  const setRingRadius = useCallback((index: number, radius: number) => {
+    const ring = ringRefs.current[index];
+    if (!ring) return;
+
+    const diameter = `${radius * 100}%`;
+    const offset = `${50 - radius * 50}%`;
+    ring.style.width = diameter;
+    ring.style.height = diameter;
+    ring.style.top = offset;
+    ring.style.left = offset;
   }, []);
 
   /* ── Animation loop ──────────────────────────────────────── */
@@ -309,25 +342,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
         if (es === "ARCHIVED") {
           const wobbleR = Math.sin(t * 0.0005 + i * 3) * 0.01;
           anglesRef.current[i] += getOrbitSpeed(i) * 0.15 * dt;
-
-          const archiveR = radiiRef.current[i] + wobbleR;
-          const pxR = archiveR * half;
-
-          const arm = armRefs.current[i];
-          if (arm) {
-            arm.style.width = `${pxR}px`;
-            arm.style.transform = `rotate(${anglesRef.current[i]}rad)`;
-            const counter = arm.querySelector<HTMLElement>("[data-counter]");
-            if (counter) counter.style.transform = `rotate(${-anglesRef.current[i]}rad)`;
-          }
-          const ring = ringRefs.current[i];
-          if (ring) {
-            const d = pxR * 2;
-            ring.style.width = `${d}px`;
-            ring.style.height = `${d}px`;
-            ring.style.top = `${half - pxR}px`;
-            ring.style.left = `${half - pxR}px`;
-          }
+          setPlanetTransforms(i, radiiRef.current[i] + wobbleR, anglesRef.current[i]);
         } else if (es === "DRIFTING") {
           const wobbleR =
             Math.sin(t * 0.0013 + i * 2) * 0.035 +
@@ -337,47 +352,11 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
             Math.sin(t * 0.0009 + i) * 0.5 +
             Math.cos(t * 0.0017 + i * 3) * 0.3;
           anglesRef.current[i] += getOrbitSpeed(i) * 0.45 * speedMod * dt;
-
-          const driftR = radiiRef.current[i] + wobbleR;
-          const pxR = driftR * half;
-
-          const arm = armRefs.current[i];
-          if (arm) {
-            arm.style.width = `${pxR}px`;
-            arm.style.transform = `rotate(${anglesRef.current[i]}rad)`;
-            const counter = arm.querySelector<HTMLElement>("[data-counter]");
-            if (counter) counter.style.transform = `rotate(${-anglesRef.current[i]}rad)`;
-          }
-          const ring = ringRefs.current[i];
-          if (ring) {
-            const d = pxR * 2;
-            ring.style.width = `${d}px`;
-            ring.style.height = `${d}px`;
-            ring.style.top = `${half - pxR}px`;
-            ring.style.left = `${half - pxR}px`;
-          }
+          setPlanetTransforms(i, radiiRef.current[i] + wobbleR, anglesRef.current[i]);
         } else {
           // Normal orbit
           anglesRef.current[i] += getOrbitSpeed(i) * dt;
-          const angle = anglesRef.current[i];
-          const r = radiiRef.current[i];
-          const pxR = r * half;
-
-          const arm = armRefs.current[i];
-          if (arm) {
-            arm.style.width = `${pxR}px`;
-            arm.style.transform = `rotate(${angle}rad)`;
-            const counter = arm.querySelector<HTMLElement>("[data-counter]");
-            if (counter) counter.style.transform = `rotate(${-angle}rad)`;
-          }
-          const ring = ringRefs.current[i];
-          if (ring) {
-            const d = pxR * 2;
-            ring.style.width = `${d}px`;
-            ring.style.height = `${d}px`;
-            ring.style.top = `${half - pxR}px`;
-            ring.style.left = `${half - pxR}px`;
-          }
+          setPlanetTransforms(i, radiiRef.current[i], anglesRef.current[i]);
         }
       }
 
@@ -386,7 +365,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
 
     rafRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [domains]);
+  }, [domains, setPlanetTransforms]);
 
   /* ── Drag handlers ───────────────────────────────────────── */
 
@@ -430,22 +409,8 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
 
         anglesRef.current[dIdx] = angle;
         radiiRef.current[dIdx] = norm;
-
-        const arm = armRefs.current[dIdx];
-        if (arm) {
-          arm.style.width = `${norm * half}px`;
-          arm.style.transform = `rotate(${angle}rad)`;
-          const counter = arm.querySelector<HTMLElement>("[data-counter]");
-          if (counter) counter.style.transform = `rotate(${-angle}rad)`;
-        }
-        const ring = ringRefs.current[dIdx];
-        if (ring) {
-          const d = norm * half * 2;
-          ring.style.width = `${d}px`;
-          ring.style.height = `${d}px`;
-          ring.style.top = `${half - norm * half}px`;
-          ring.style.left = `${half - norm * half}px`;
-        }
+        setPlanetTransforms(dIdx, norm, angle);
+        setRingRadius(dIdx, norm);
       };
 
       const onUp = () => {
@@ -476,7 +441,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
     },
-    [demoUserId, domainUrl, domains, editingDemo, isDemo, router],
+    [demoUserId, domainUrl, domains, editingDemo, isDemo, router, setPlanetTransforms, setRingRadius],
   );
 
   /* ── Keyboard navigation (1–9) ──────────────────────────── */
@@ -673,7 +638,10 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                     borderColor: cfg.ringColor,
                     ["--shimmer-duration" as string]: `${6 + i * 2}s`,
                     ["--shimmer-delay" as string]: `${i * 1.5}s`,
-                    width: 0, height: 0,
+                    width: `${radii[i] * 100}%`,
+                    height: `${radii[i] * 100}%`,
+                    top: `${50 - radii[i] * 50}%`,
+                    left: `${50 - radii[i] * 50}%`,
                     transition: dragging === i ? "none" : "border-color 0.3s",
                   }}
                 />
@@ -809,80 +777,97 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                     width: 0,
                     height: 0,
                     transformOrigin: "0px 0px",
+                    transform: `rotate(${anglesRef.current[i]}rad)`,
+                    willChange: "transform",
                   }}
                 >
                   <div
-                    data-counter
                     className="absolute"
                     style={{
-                      right: -(dot / 2),
-                      top: -(dot / 2),
-                      width: dot,
-                      height: dot,
+                      top: 0,
+                      left: 0,
+                      transform: `translate3d(${radii[i] * (sizeRef.current / 2)}px, 0, 0)`,
+                      willChange: "transform",
                     }}
+                    ref={(el) => { moverRefs.current[i] = el; }}
                   >
-                    {/* Hit area */}
                     <div
-                      className={`absolute flex items-center justify-center ${isArchived || isDrifting ? "cursor-pointer" : "planet-grab"} ${isDraggingThis ? "z-50" : "z-10"}`}
+                      data-counter
+                      className="absolute"
                       style={{
-                        top: -(22 - dot / 2),
-                        left: -(22 - dot / 2),
-                        width: dot + 44,
-                        height: dot + 44,
+                        left: -(dot / 2),
+                        top: -(dot / 2),
+                        width: dot,
+                        height: dot,
+                        transform: `rotate(${-anglesRef.current[i]}rad)`,
+                        transformOrigin: "center center",
+                        willChange: "transform",
                       }}
-                      onPointerDown={(e) => handlePointerDown(e, i)}
+                      ref={(el) => { counterRefs.current[i] = el; }}
                     >
-                      {/* Halo */}
+                      {/* Hit area */}
                       <div
-                        className={`absolute rounded-full ${isDrifting ? "drift-glow" : isArchived ? "archive-drift" : ""}`}
+                        className={`absolute flex items-center justify-center ${isArchived || isDrifting ? "cursor-pointer" : "planet-grab"} ${isDraggingThis ? "z-50" : "z-10"}`}
                         style={{
-                          width: dot * (isArchived ? 2.5 : isDrifting ? 5 : 3.5),
-                          height: dot * (isArchived ? 2.5 : isDrifting ? 5 : 3.5),
-                          background: `radial-gradient(circle, ${cfg.color}${isArchived ? "10" : isDrifting ? "20" : "15"} 0%, transparent 70%)`,
-                          transition: "transform 0.3s",
-                          transform: isDraggingThis ? "scale(1.8)" : "scale(1)",
+                          top: -(22 - dot / 2),
+                          left: -(22 - dot / 2),
+                          width: dot + 44,
+                          height: dot + 44,
                         }}
-                      />
-                      {/* Dot */}
-                      <div
-                        className={isArchived ? "asteroid-shape relative" : "rounded-full relative"}
-                        style={{
-                          width: dot,
-                          height: dot,
-                          backgroundColor: cfg.color,
-                          boxShadow: cfg.glow,
-                          opacity: isArchived ? 0.4 : 1,
-                          transition: "transform 0.2s",
-                          transform: isDraggingThis ? "scale(1.4)" : "scale(1)",
-                        }}
-                      />
-                    </div>
-
-                    {/* Label */}
-                    <div
-                      className="absolute whitespace-nowrap pointer-events-none"
-                      style={{ top: dot + 16, left: "50%", transform: "translateX(-50%)" }}
-                    >
-                      <p
-                        className="text-[10px] font-mono tracking-[0.2em] uppercase text-center transition-colors"
-                        style={{
-                          color: isArchived ? "rgba(113,113,122,0.4)" : isDrifting ? "#f87171" : isDraggingThis ? cfg.color : "rgba(161,161,170,0.7)",
-                          textShadow: isDrifting ? "0 0 8px rgba(248,113,113,0.4)" : "none",
-                        }}
+                        onPointerDown={(e) => handlePointerDown(e, i)}
                       >
-                        {domain.name}
-                      </p>
-                      {(isDrifting || isArchived) && (
-                        <p
-                          className="text-[8px] font-mono tracking-widest uppercase text-center mt-0.5 transition-opacity"
+                        {/* Halo */}
+                        <div
+                          className={`absolute rounded-full ${isDrifting ? "drift-glow" : isArchived ? "archive-drift" : ""}`}
                           style={{
-                            color: isDrifting ? "rgba(248,113,113,0.5)" : cfg.color,
-                            opacity: isArchived ? 0.25 : 0.7,
+                            width: dot * (isArchived ? 2.5 : isDrifting ? 5 : 3.5),
+                            height: dot * (isArchived ? 2.5 : isDrifting ? 5 : 3.5),
+                            background: `radial-gradient(circle, ${cfg.color}${isArchived ? "10" : isDrifting ? "20" : "15"} 0%, transparent 70%)`,
+                            transition: "transform 0.3s",
+                            transform: isDraggingThis ? "scale(1.8)" : "scale(1)",
+                          }}
+                        />
+                        {/* Dot */}
+                        <div
+                          className={isArchived ? "asteroid-shape relative" : "rounded-full relative"}
+                          style={{
+                            width: dot,
+                            height: dot,
+                            backgroundColor: cfg.color,
+                            boxShadow: cfg.glow,
+                            opacity: isArchived ? 0.4 : 1,
+                            transition: "transform 0.2s",
+                            transform: isDraggingThis ? "scale(1.4)" : "scale(1)",
+                          }}
+                        />
+                      </div>
+
+                      {/* Label */}
+                      <div
+                        className="absolute whitespace-nowrap pointer-events-none"
+                        style={{ top: dot + 16, left: "50%", transform: "translateX(-50%)" }}
+                      >
+                        <p
+                          className="text-[10px] font-mono tracking-[0.2em] uppercase text-center transition-colors"
+                          style={{
+                            color: isArchived ? "rgba(113,113,122,0.4)" : isDrifting ? "#f87171" : isDraggingThis ? cfg.color : "rgba(161,161,170,0.7)",
+                            textShadow: isDrifting ? "0 0 8px rgba(248,113,113,0.4)" : "none",
                           }}
                         >
-                          {cfg.label}
+                          {domain.name}
                         </p>
-                      )}
+                        {(isDrifting || isArchived) && (
+                          <p
+                            className="text-[8px] font-mono tracking-widest uppercase text-center mt-0.5 transition-opacity"
+                            style={{
+                              color: isDrifting ? "rgba(248,113,113,0.5)" : cfg.color,
+                              opacity: isArchived ? 0.25 : 0.7,
+                            }}
+                          >
+                            {cfg.label}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
