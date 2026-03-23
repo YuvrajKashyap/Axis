@@ -29,6 +29,7 @@ export default async function Design2() {
     slug: string;
     name: string;
     identity: string | null;
+    nextMove: string | null;
     status: "ALIGNED" | "NEUTRAL" | "DRIFTING" | "ARCHIVED";
     positionX: number | null;
     positionY: number | null;
