@@ -498,7 +498,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
         </div>
       )}
 
-      <main className="min-h-screen bg-black text-white domain-snap-container">
+      <main className="min-h-screen w-full overflow-x-hidden bg-black text-white domain-snap-container">
         {/* Ambient */}
         <div className="fixed inset-0 pointer-events-none" aria-hidden>
           <div
@@ -522,179 +522,183 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
         />
 
         {/* Fixed nav */}
-        <div className="fixed top-0 left-0 right-0 z-30 px-5 md:px-12 py-4 md:py-6 flex items-center justify-between">
-          <Link
-            href={homeUrl}
-            className="text-[10px] md:text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-700 hover:text-zinc-400 active:text-zinc-400 transition-colors py-2"
-          >
-            ← Axis
-          </Link>
-          <div className="flex items-center gap-4 md:gap-6">
-            {isAligning && (
-              <p className="text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-700">
-                {alignIdx + 1} / {alignChain!.length}
-              </p>
-            )}
-            {editing ? (
-              <button
-                onClick={handleSaveEdits}
-                disabled={isSaving}
-                className="text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-500 hover:text-white transition-colors disabled:opacity-50"
-              >
-                {isSaving ? "Saving..." : "Save"}
-              </button>
-            ) : (
-              <button
-                onClick={() => setEditing(true)}
-                className="text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-800 hover:text-zinc-500 transition-colors"
-              >
-                Edit
-              </button>
-            )}
-            <p
-              className="text-[9px] font-mono tracking-[0.3em] uppercase"
-              style={{ color: `rgba(${r},${g},${b},0.3)` }}
+        <div className="fixed top-0 left-0 right-0 z-30 px-4 py-4 sm:px-5 md:px-12 md:py-6">
+          <div className="mx-auto flex w-full max-w-6xl items-start justify-between gap-4 sm:items-center">
+            <Link
+              href={homeUrl}
+              className="shrink-0 py-2 text-[10px] md:text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-700 hover:text-zinc-400 active:text-zinc-400 transition-colors"
             >
-              {currentStatus === "DRIFTING" ? "Drifting" : currentStatus === "ARCHIVED" ? "Archived" : "Active"}
-            </p>
+              ← Axis
+            </Link>
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2 text-right md:gap-x-6">
+              {isAligning && (
+                <p className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-700">
+                  {alignIdx + 1} / {alignChain!.length}
+                </p>
+              )}
+              {editing ? (
+                <button
+                  onClick={handleSaveEdits}
+                  disabled={isSaving}
+                  className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-500 hover:text-white transition-colors disabled:opacity-50"
+                >
+                  {isSaving ? "Saving..." : "Save"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setEditing(true)}
+                  className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-800 hover:text-zinc-500 transition-colors"
+                >
+                  Edit
+                </button>
+              )}
+              <p
+                className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase"
+                style={{ color: `rgba(${r},${g},${b},0.3)` }}
+              >
+                {currentStatus === "DRIFTING" ? "Drifting" : currentStatus === "ARCHIVED" ? "Archived" : "Active"}
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Section 1: Hero */}
-        <section className="domain-snap-section min-h-screen flex flex-col items-center justify-center px-6 relative z-10">
-          <div
-            className={`domain-planet rounded-full mb-8 transition-all duration-1000 ${
-              mounted ? "opacity-100 scale-100" : "opacity-0 scale-50"
-            }`}
-            style={{
-              width: 12, height: 12,
-              backgroundColor: color,
-              boxShadow: `0 0 8px rgba(${r},${g},${b},0.8), 0 0 24px rgba(${r},${g},${b},0.4), 0 0 60px rgba(${r},${g},${b},0.12)`,
-            }}
-          />
-          {editing ? (
-            <input
-              type="text"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              className={`text-3xl sm:text-5xl md:text-7xl font-semibold tracking-tight text-center bg-transparent outline-none border-b border-zinc-800 focus:border-zinc-600 transition-all duration-1000 text-white w-full ${
-                mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+        <section className="domain-snap-section relative z-10 flex min-h-screen w-full flex-col items-center justify-center px-5 sm:px-6">
+          <div className="mx-auto flex w-full max-w-3xl flex-col items-center">
+            <div
+              className={`domain-planet rounded-full mb-8 transition-all duration-1000 ${
+                mounted ? "opacity-100 scale-100" : "opacity-0 scale-50"
               }`}
-              style={{ transitionDelay: "300ms" }}
+              style={{
+                width: 12, height: 12,
+                backgroundColor: color,
+                boxShadow: `0 0 8px rgba(${r},${g},${b},0.8), 0 0 24px rgba(${r},${g},${b},0.4), 0 0 60px rgba(${r},${g},${b},0.12)`,
+              }}
             />
-          ) : (
-            <h1
-              className={`text-3xl sm:text-5xl md:text-7xl font-semibold tracking-tight text-center transition-all duration-1000 ${
-                mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
-              }`}
-              style={{ transitionDelay: "300ms" }}
-            >
-              {domain.name}
-            </h1>
-          )}
-          {editing ? (
-            <input
-              type="text"
-              value={editIdentity}
-              onChange={(e) => setEditIdentity(e.target.value)}
-              placeholder="Identity statement..."
-              className={`mt-5 text-sm text-zinc-400 text-center max-w-sm bg-transparent outline-none border-b border-zinc-800 focus:border-zinc-600 transition-all duration-1000 placeholder:text-zinc-800 w-full ${
+            {editing ? (
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className={`w-full text-3xl sm:text-5xl md:text-7xl font-semibold tracking-tight text-center bg-transparent outline-none border-b border-zinc-800 focus:border-zinc-600 transition-all duration-1000 text-white ${
+                  mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+                }`}
+                style={{ transitionDelay: "300ms" }}
+              />
+            ) : (
+              <h1
+                className={`w-full text-3xl sm:text-5xl md:text-7xl font-semibold tracking-tight text-center transition-all duration-1000 ${
+                  mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+                }`}
+                style={{ transitionDelay: "300ms" }}
+              >
+                {domain.name}
+              </h1>
+            )}
+            {editing ? (
+              <input
+                type="text"
+                value={editIdentity}
+                onChange={(e) => setEditIdentity(e.target.value)}
+                placeholder="Identity statement..."
+                className={`mt-5 w-full max-w-sm text-sm text-zinc-400 text-center bg-transparent outline-none border-b border-zinc-800 focus:border-zinc-600 transition-all duration-1000 placeholder:text-zinc-800 ${
+                  mounted ? "opacity-100" : "opacity-0"
+                }`}
+                style={{ transitionDelay: "600ms" }}
+              />
+            ) : domain.identity ? (
+              <p
+                className={`mt-5 max-w-sm text-sm text-zinc-600 text-center transition-all duration-1000 ${
+                  mounted ? "opacity-100" : "opacity-0"
+                }`}
+                style={{ transitionDelay: "600ms" }}
+              >
+                {domain.identity}
+              </p>
+            ) : null}
+
+            {/* Controls: color + status */}
+            <div
+              className={`mt-10 flex w-full max-w-md flex-wrap items-center justify-center gap-x-6 gap-y-4 transition-all duration-1000 ${
                 mounted ? "opacity-100" : "opacity-0"
               }`}
-              style={{ transitionDelay: "600ms" }}
-            />
-          ) : domain.identity ? (
-            <p
-              className={`mt-5 text-sm text-zinc-600 text-center max-w-sm transition-all duration-1000 ${
-                mounted ? "opacity-100" : "opacity-0"
-              }`}
-              style={{ transitionDelay: "600ms" }}
+              style={{ transitionDelay: "900ms" }}
             >
-              {domain.identity}
-            </p>
-          ) : null}
+              {/* Color picker */}
+              <ColorPicker color={color} onChange={handleColorChange} />
 
-          {/* Controls: color + status */}
-          <div
-            className={`mt-10 flex items-center gap-6 transition-all duration-1000 ${
-              mounted ? "opacity-100" : "opacity-0"
-            }`}
-            style={{ transitionDelay: "900ms" }}
-          >
-            {/* Color picker */}
-            <ColorPicker color={color} onChange={handleColorChange} />
-
-            {/* Status toggles */}
-            <div className="flex items-center gap-3">
-              {DOMAIN_STATUS_OPTIONS.map((status: DomainStatusOption) => {
-                const isActive =
-                  currentStatus === status ||
-                  (status === "ALIGNED" &&
-                    (currentStatus === "ALIGNED" ||
-                      currentStatus === "NEUTRAL"));
-                const label =
-                  status === "ALIGNED"
-                    ? "Active"
-                    : status === "DRIFTING"
-                      ? "Drifting"
-                      : "Archived";
-                return (
-                  <button
-                    key={status}
-                    onClick={() => handleStatusChange(status)}
-                    disabled={isPending}
-                    className={`text-[9px] font-mono tracking-[0.2em] uppercase transition-all duration-500 py-1 ${
-                      isActive ? "" : "text-zinc-800 hover:text-zinc-600 active:text-zinc-600"
-                    } ${isPending ? "opacity-50" : ""}`}
-                    style={{
-                      color: isActive
-                        ? status === "DRIFTING"
-                          ? "rgba(248,113,113,0.6)"
-                          : status === "ARCHIVED"
-                            ? "rgba(113,113,122,0.6)"
-                            : `rgba(${r},${g},${b},0.6)`
-                        : undefined,
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
+              {/* Status toggles */}
+              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+                {DOMAIN_STATUS_OPTIONS.map((status: DomainStatusOption) => {
+                  const isActive =
+                    currentStatus === status ||
+                    (status === "ALIGNED" &&
+                      (currentStatus === "ALIGNED" ||
+                        currentStatus === "NEUTRAL"));
+                  const label =
+                    status === "ALIGNED"
+                      ? "Active"
+                      : status === "DRIFTING"
+                        ? "Drifting"
+                        : "Archived";
+                  return (
+                    <button
+                      key={status}
+                      onClick={() => handleStatusChange(status)}
+                      disabled={isPending}
+                      className={`py-1 text-[9px] font-mono tracking-[0.2em] uppercase transition-all duration-500 ${
+                        isActive ? "" : "text-zinc-800 hover:text-zinc-600 active:text-zinc-600"
+                      } ${isPending ? "opacity-50" : ""}`}
+                      style={{
+                        color: isActive
+                          ? status === "DRIFTING"
+                            ? "rgba(248,113,113,0.6)"
+                            : status === "ARCHIVED"
+                              ? "rgba(113,113,122,0.6)"
+                              : `rgba(${r},${g},${b},0.6)`
+                          : undefined,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
+            {/* Delete — only in edit mode, below controls */}
+            {editing && (
+              <div className="mt-8">
+                {!confirmDelete ? (
+                  <button
+                    onClick={() => setConfirmDelete(true)}
+                    className="text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-800 hover:text-red-400/50 transition-colors duration-500"
+                  >
+                    Delete domain
+                  </button>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
+                    <p className="text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-600">
+                      Are you sure?
+                    </p>
+                    <button
+                      onClick={() => setConfirmDelete(false)}
+                      className="text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-700 hover:text-zinc-500 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      className="text-[9px] font-mono tracking-[0.2em] uppercase text-red-400/60 hover:text-red-400 transition-colors disabled:opacity-30"
+                    >
+                      {isDeleting ? "Deleting..." : "Delete forever"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-
-          {/* Delete — only in edit mode, below controls */}
-          {editing && (
-            <div className="mt-8">
-              {!confirmDelete ? (
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  className="text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-800 hover:text-red-400/50 transition-colors duration-500"
-                >
-                  Delete domain
-                </button>
-              ) : (
-                <div className="flex items-center gap-5">
-                  <p className="text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-600">
-                    Are you sure?
-                  </p>
-                  <button
-                    onClick={() => setConfirmDelete(false)}
-                    className="text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-700 hover:text-zinc-500 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                    className="text-[9px] font-mono tracking-[0.2em] uppercase text-red-400/60 hover:text-red-400 transition-colors disabled:opacity-30"
-                  >
-                    {isDeleting ? "Deleting..." : "Delete forever"}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
 
           <div className="absolute bottom-16 domain-scroll">
             <div
@@ -707,8 +711,8 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
         </section>
 
         {/* Section 2: Vision */}
-        <section className="domain-snap-section min-h-screen flex items-center justify-center px-6 relative z-10">
-          <div className="max-w-lg text-center">
+        <section className="domain-snap-section min-h-screen flex w-full items-center justify-center px-5 sm:px-6 relative z-10">
+          <div className="mx-auto w-full max-w-lg text-center">
             <p
               className="text-[10px] font-mono tracking-[0.5em] uppercase mb-8"
               style={{ color: `rgba(${r},${g},${b},0.4)` }}
@@ -732,7 +736,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
         </section>
 
         {/* Section 3: Reason + Cost */}
-        <section className="domain-snap-section min-h-screen flex items-center justify-center px-6 md:px-16 relative z-10">
+        <section className="domain-snap-section min-h-screen flex w-full items-center justify-center px-5 sm:px-6 md:px-16 relative z-10">
           <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-40">
             <div className="text-center md:text-right">
               <p
@@ -790,7 +794,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
         </section>
 
         {/* Section 4: Commitment */}
-        <section className="domain-snap-section min-h-screen flex items-center justify-center px-6 relative z-10">
+        <section className="domain-snap-section min-h-screen flex w-full items-center justify-center px-5 sm:px-6 relative z-10">
           {/* Drift warning — side note on desktop, bottom note on mobile */}
           <div className="hidden lg:flex absolute right-[8%] xl:right-[10%] top-1/2 -translate-y-1/2 items-start gap-4 max-w-[280px]">
             <div
@@ -837,7 +841,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
               className="w-full bg-transparent text-center text-lg text-white outline-none border-b border-zinc-800 pb-4 placeholder:text-zinc-800 focus:border-zinc-600 transition-colors"
             />
 
-            <div className="mt-8 flex items-center justify-center gap-8">
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
               {isAligning && (
                 <button
                   onClick={handleSkip}
