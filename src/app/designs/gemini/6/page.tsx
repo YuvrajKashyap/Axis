@@ -1,4 +1,4 @@
-import { getDomains } from "@/lib/get-data";
+import { getDomains, type DomainList, type DomainListItem } from "@/lib/get-data";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -7,7 +7,7 @@ export default async function SolarSystemDesign() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const domains = await getDomains(session.user.id);
+  const domains: DomainList = await getDomains(session.user.id);
 
   return (
     <main className="min-h-screen bg-black text-white font-sans overflow-hidden flex items-center justify-center relative">
@@ -32,16 +32,16 @@ export default async function SolarSystemDesign() {
       </div>
 
       {/* Orbital Planes */}
-      {domains.map((d, i) => {
+      {domains.map((domain: DomainListItem, index: number) => {
         // Different orbit sizes and speeds
-        const size = (i + 1) * 200 + 100;
-        const speed = 20 + i * 10;
-        const planetSize = 80 - i * 10;
-        const delay = -i * 5;
+        const size = (index + 1) * 200 + 100;
+        const speed = 20 + index * 10;
+        const planetSize = 80 - index * 10;
+        const delay = -index * 5;
 
         return (
           <div
-            key={d.id}
+            key={domain.id}
             className="absolute border border-zinc-900 rounded-full pointer-events-none transition-colors hover:border-zinc-700 animate-[spin_linear_infinite]"
             style={{
               width: `${size}px`,
@@ -60,7 +60,7 @@ export default async function SolarSystemDesign() {
               }}
             >
               <Link
-                href={`/domain/${d.slug}`}
+                href={`/domain/${domain.slug}`}
                 className="block relative p-4 rounded-full border border-zinc-800 bg-black hover:bg-zinc-950 transition-all duration-500 hover:scale-110 group-hover:border-white/20"
                 style={{
                   width: `${planetSize * 2}px`,
@@ -69,19 +69,19 @@ export default async function SolarSystemDesign() {
               >
                 <div className="h-full w-full flex flex-col items-center justify-center text-center p-2">
                   <span className="text-[8px] text-zinc-700 uppercase tracking-tighter mb-1 font-mono">
-                    MOD_{i + 1}
+                    MOD_{index + 1}
                   </span>
                   <h3 className="text-[10px] font-light uppercase tracking-widest text-zinc-300 group-hover:text-white group-hover:tracking-[0.2em] transition-all">
-                    {d.name}
+                    {domain.name}
                   </h3>
                   
                   {/* Floating Identity Info on Hover */}
                   <div className="absolute top-full mt-4 left-1/2 -translate-x-1/2 w-48 opacity-0 group-hover:opacity-100 transition-all duration-700 pointer-events-none">
                     <p className="text-[9px] text-zinc-500 uppercase leading-relaxed tracking-widest">
-                      {d.identity}
+                      {domain.identity}
                     </p>
                     <div className="mt-2 text-[8px] text-zinc-800 uppercase tracking-widest">
-                      Status: {d.status}
+                      Status: {domain.status}
                     </div>
                   </div>
                 </div>

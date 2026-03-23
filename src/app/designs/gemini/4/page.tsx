@@ -1,4 +1,4 @@
-import { getDomains } from "@/lib/get-data";
+import { getDomains, type DomainList, type DomainListItem } from "@/lib/get-data";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -7,7 +7,7 @@ export default async function VectorDesign() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const domains = await getDomains(session.user.id);
+  const domains: DomainList = await getDomains(session.user.id);
 
   return (
     <main className="min-h-screen bg-[#020202] text-zinc-300 font-mono text-[10px] overflow-hidden selection:bg-zinc-800 selection:text-white antialiased">
@@ -31,10 +31,10 @@ export default async function VectorDesign() {
         </header>
 
         <div className="flex flex-col space-y-24 max-w-lg">
-          {domains.map((d, i) => (
+          {domains.map((domain: DomainListItem, index: number) => (
             <Link
-              key={d.id}
-              href={`/domain/${d.slug}`}
+              key={domain.id}
+              href={`/domain/${domain.slug}`}
               className="group flex items-start gap-12 group"
             >
               <div className="flex flex-col items-center pt-1">
@@ -44,19 +44,19 @@ export default async function VectorDesign() {
               
               <div className="space-y-6">
                 <div className="flex items-center gap-4">
-                  <span className="text-zinc-700">0{i + 1}</span>
+                  <span className="text-zinc-700">0{index + 1}</span>
                   <h2 className="text-lg text-white uppercase tracking-widest group-hover:translate-x-4 transition-transform duration-700">
-                    {d.name}
+                    {domain.name}
                   </h2>
                 </div>
                 
                 <p className="text-zinc-600 group-hover:text-zinc-300 transition-colors leading-relaxed uppercase tracking-widest max-w-[280px]">
-                  {d.identity}
+                  {domain.identity}
                 </p>
 
                 <div className="flex items-center gap-8 text-zinc-800 group-hover:text-zinc-600 transition-colors uppercase">
-                  <span>[ {d.status} ]</span>
-                  <span>[ {d.slug} ]</span>
+                  <span>[ {domain.status} ]</span>
+                  <span>[ {domain.slug} ]</span>
                 </div>
               </div>
             </Link>

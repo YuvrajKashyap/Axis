@@ -1,4 +1,4 @@
-import { getDomains } from "@/lib/get-data";
+import { getDomains, type DomainList, type DomainListItem } from "@/lib/get-data";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -7,7 +7,7 @@ export default async function EclipseDesign() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const domains = await getDomains(session.user.id);
+  const domains: DomainList = await getDomains(session.user.id);
 
   return (
     <main className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-8 overflow-hidden font-sans">
@@ -20,10 +20,10 @@ export default async function EclipseDesign() {
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-          {domains.map((d, i) => (
+          {domains.map((domain: DomainListItem, index: number) => (
             <Link
-              key={d.id}
-              href={`/domain/${d.slug}`}
+              key={domain.id}
+              href={`/domain/${domain.slug}`}
               className="group relative flex flex-col items-center text-center"
             >
               {/* The "Eclipse" Circle */}
@@ -33,15 +33,15 @@ export default async function EclipseDesign() {
                 {/* The "Corona" Glow */}
                 <div className="absolute inset-0 rounded-full bg-white/5 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000 scale-110" />
                 <span className="relative z-20 text-[10px] text-zinc-700 font-mono tracking-widest group-hover:text-zinc-400 transition-colors">
-                  0{i + 1}
+                  0{index + 1}
                 </span>
               </div>
 
               <h2 className="text-xl font-light tracking-[0.2em] uppercase mb-4 group-hover:tracking-[0.4em] transition-all duration-700">
-                {d.name}
+                {domain.name}
               </h2>
               <p className="text-[10px] text-zinc-500 uppercase tracking-widest leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-700 max-w-[180px]">
-                {d.identity}
+                {domain.identity}
               </p>
             </Link>
           ))}
