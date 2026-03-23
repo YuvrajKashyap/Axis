@@ -39,7 +39,15 @@ export default async function Design1() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const domains = await getDomains(session.user.id);
+  const domains: {
+    id: string;
+    slug: string;
+    name: string;
+    identity: string | null;
+    status: "ALIGNED" | "NEUTRAL" | "DRIFTING" | "ARCHIVED";
+    positionX: number | null;
+    positionY: number | null;
+}[] = await getDomains(session.user.id);
 
   // Assign fallback positions by index if missing
   const fallbackX = [2, -1, 0];
