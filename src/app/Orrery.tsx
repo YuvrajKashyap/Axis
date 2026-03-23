@@ -195,6 +195,8 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
   const [newDomainName, setNewDomainName] = useState("");
   const [createError, setCreateError] = useState("");
   const [isCreating, startCreateTransition] = useTransition();
+  const showCreateRef = useRef(showCreate);
+  showCreateRef.current = showCreate;
 
   const [radii, setRadii] = useState<number[]>(() => {
     let driftIdx = 0;
@@ -495,7 +497,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (
-        showCreate ||
+        showCreateRef.current ||
         e.defaultPrevented ||
         e.altKey ||
         e.ctrlKey ||
@@ -515,7 +517,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [domainUrl, isDemo, navigable, router, showCreate]);
+  }, [domainUrl, isDemo, navigable, router]);
 
   /* ── Render ──────────────────────────────────────────────── */
 
@@ -955,6 +957,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
               value={newDomainName}
               onChange={(e) => { setNewDomainName(e.target.value); setCreateError(""); }}
               onKeyDown={(e) => {
+                e.stopPropagation();
                 if (e.key === "Enter" && newDomainName.trim()) {
                   startCreateTransition(async () => {
                     const result = await createDomain(newDomainName, editingDemo ? demoUserId : undefined);
