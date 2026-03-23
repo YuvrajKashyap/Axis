@@ -1,6 +1,12 @@
 import Link from 'next/link';
 
-const designs = [
+type GeminiDesign = {
+  id: number;
+  name: string;
+  desc: string;
+};
+
+const designs: GeminiDesign[] = [
   { id: 1, name: "Eclipse", desc: "Circular alignment and corona glows." },
   { id: 2, name: "Stellar Strip", desc: "Vertical strip with cinematic briefing." },
   { id: 3, name: "Gravity", desc: "Weight-based typographic hierarchy." },
@@ -22,20 +28,20 @@ export default function GeminiIndex() {
         </header>
 
         <div className="space-y-8">
-          {designs.map((d) => (
+          {designs.map((design: GeminiDesign) => (
             <Link 
-              key={d.id} 
-              href={`/designs/gemini/${d.id}`}
+              key={design.id} 
+              href={`/designs/gemini/${design.id}`}
               className="group block border-l border-zinc-900 pl-8 hover:border-white transition-all duration-500 py-4"
             >
               <div className="flex items-baseline justify-between">
                 <h2 className="text-xl font-light tracking-widest uppercase group-hover:translate-x-4 transition-transform duration-700">
-                  {d.name}
+                  {design.name}
                 </h2>
-                <span className="text-[10px] text-zinc-800 group-hover:text-zinc-500 font-mono transition-colors">0{d.id}</span>
+                <span className="text-[10px] text-zinc-800 group-hover:text-zinc-500 font-mono transition-colors">0{design.id}</span>
               </div>
               <p className="mt-4 text-[10px] text-zinc-600 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity duration-700">
-                {d.desc}
+                {design.desc}
               </p>
             </Link>
           ))}

@@ -5,6 +5,11 @@ import Link from "next/link";
 import type { SampleDomain } from "../data";
 import "./design4.css";
 
+type DesignBlock = {
+  label: string;
+  value: string | null;
+};
+
 function hexToRgb(hex: string) {
   const h = hex.replace("#", "");
   return {
@@ -32,7 +37,7 @@ export function Design4({ domain }: { domain: SampleDomain }) {
     return () => clearTimeout(t);
   }, []);
 
-  const blocks = [
+  const blocks: DesignBlock[] = [
     { label: "Vision", value: domain.vision },
     { label: "Reason", value: domain.primaryReason },
     { label: "Cost", value: domain.primaryCost ?? domain.currentReality },
@@ -107,7 +112,7 @@ export function Design4({ domain }: { domain: SampleDomain }) {
 
         {/* Blocks */}
         <div className="max-w-xl mx-auto px-8 pb-8">
-          {blocks.map((block, i) => {
+          {blocks.map((block: DesignBlock, i: number) => {
             const isActive = active === i;
             const hasValue = !!block.value;
             return (

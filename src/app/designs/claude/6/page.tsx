@@ -99,8 +99,8 @@ export default async function Design6() {
           }}
         >
           {/* Orbit rings */}
-          {ORBITS.map((orb, i) => {
-            const diameter = orb.radius * 2;
+          {ORBITS.map((orbit: OrbitalConfig, i: number) => {
+            const diameter = orbit.radius * 2;
             const domain: DomainListItem | undefined = domains[i];
             if (!domain) return null;
             const status = domain.status;
@@ -109,12 +109,12 @@ export default async function Design6() {
             return (
               <div
                 key={`ring-${i}`}
-                className={`absolute rounded-full border ${orb.ringClass}`}
+                className={`absolute rounded-full border ${orbit.ringClass}`}
                 style={{
                   width: diameter,
                   height: diameter,
-                  top: CENTER - orb.radius,
-                  left: CENTER - orb.radius,
+                  top: CENTER - orbit.radius,
+                  left: CENTER - orbit.radius,
                   borderColor: cfg.ringColor,
                 }}
               />
@@ -156,7 +156,7 @@ export default async function Design6() {
           </div>
 
           {/* Planets — orbit arm technique */}
-          {ORBITS.map((orb, i) => {
+          {ORBITS.map((orbit: OrbitalConfig, i: number) => {
             const domain: DomainListItem | undefined = domains[i];
             if (!domain) return null;
 
@@ -169,18 +169,18 @@ export default async function Design6() {
               // Rotation origin is the left edge (= system center)
               <div
                 key={`arm-${domain.id}`}
-                className={`absolute ${orb.armClass}`}
+                className={`absolute ${orbit.armClass}`}
                 style={{
                   top: CENTER,
                   left: CENTER,
-                  width: orb.radius,
+                  width: orbit.radius,
                   height: 0,
                   transformOrigin: "0px 0px",
                 }}
               >
                 {/* Planet at the end of the arm */}
                 <div
-                  className={`absolute ${orb.counterClass}`}
+                  className={`absolute ${orbit.counterClass}`}
                   style={{
                     right: -(dotSize / 2),
                     top: -(dotSize / 2),

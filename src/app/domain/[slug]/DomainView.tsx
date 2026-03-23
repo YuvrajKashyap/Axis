@@ -205,6 +205,9 @@ type Commitment = {
   createdAt: string;
 };
 
+const DOMAIN_STATUS_OPTIONS = ["ALIGNED", "DRIFTING", "ARCHIVED"] as const;
+type DomainStatusOption = (typeof DOMAIN_STATUS_OPTIONS)[number];
+
 type DomainViewProps = {
   domain: {
     id: string;
@@ -244,7 +247,11 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
   const domainLink = useCallback((slug: string, extra?: string) => {
     const params = new URLSearchParams();
     if (demoUser) params.set("demoUser", demoUser);
-    if (extra) new URLSearchParams(extra).forEach((v, k) => params.set(k, v));
+    if (extra) {
+      new URLSearchParams(extra).forEach((value: string, key: string) =>
+        params.set(key, value),
+      );
+    }
     const qs = params.toString();
     return qs ? `/domain/${slug}?${qs}` : `/domain/${slug}`;
   }, [demoUser]);
@@ -420,7 +427,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
           />
 
           {/* Particles */}
-          {Array.from({ length: 12 }).map((_, i) => (
+          {Array.from({ length: 12 }).map((_: unknown, i: number) => (
             <div
               key={i}
               className="absolute quote-particle rounded-full"
@@ -619,22 +626,33 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
 
             {/* Status toggles */}
             <div className="flex items-center gap-3">
-              {(["ALIGNED", "DRIFTING", "ARCHIVED"] as const).map((s) => {
-                const isActive = currentStatus === s || (s === "ALIGNED" && (currentStatus === "ALIGNED" || currentStatus === "NEUTRAL"));
-                const label = s === "ALIGNED" ? "Active" : s === "DRIFTING" ? "Drifting" : "Archived";
+              {DOMAIN_STATUS_OPTIONS.map((status: DomainStatusOption) => {
+                const isActive =
+                  currentStatus === status ||
+                  (status === "ALIGNED" &&
+                    (currentStatus === "ALIGNED" ||
+                      currentStatus === "NEUTRAL"));
+                const label =
+                  status === "ALIGNED"
+                    ? "Active"
+                    : status === "DRIFTING"
+                      ? "Drifting"
+                      : "Archived";
                 return (
                   <button
-                    key={s}
-                    onClick={() => handleStatusChange(s)}
+                    key={status}
+                    onClick={() => handleStatusChange(status)}
                     disabled={isPending}
                     className={`text-[9px] font-mono tracking-[0.2em] uppercase transition-all duration-500 py-1 ${
                       isActive ? "" : "text-zinc-800 hover:text-zinc-600 active:text-zinc-600"
                     } ${isPending ? "opacity-50" : ""}`}
                     style={{
                       color: isActive
-                        ? s === "DRIFTING" ? "rgba(248,113,113,0.6)"
-                        : s === "ARCHIVED" ? "rgba(113,113,122,0.6)"
-                        : `rgba(${r},${g},${b},0.6)`
+                        ? status === "DRIFTING"
+                          ? "rgba(248,113,113,0.6)"
+                          : status === "ARCHIVED"
+                            ? "rgba(113,113,122,0.6)"
+                            : `rgba(${r},${g},${b},0.6)`
                         : undefined,
                     }}
                   >
@@ -856,11 +874,13 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
                   }}
                 >
                   <div className="mt-6 space-y-3 max-h-[280px] overflow-y-auto">
-                    {commitments.map((c) => (
-                      <div key={c.id} className="text-left py-2">
-                        <p className="text-[12px] text-zinc-500 leading-relaxed">{c.text}</p>
+                    {commitments.map((commitment: Commitment) => (
+                      <div key={commitment.id} className="text-left py-2">
+                        <p className="text-[12px] text-zinc-500 leading-relaxed">
+                          {commitment.text}
+                        </p>
                         <p className="text-[9px] font-mono text-zinc-800 mt-1">
-                          {formatDate(c.createdAt)}
+                          {formatDate(commitment.createdAt)}
                         </p>
                       </div>
                     ))}

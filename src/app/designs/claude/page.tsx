@@ -1,6 +1,14 @@
 import Link from "next/link";
 
-const variants = [
+type ClaudeVariant = {
+  num: number;
+  name: string;
+  description: string;
+  feel: string;
+  special?: true;
+};
+
+const variants: ClaudeVariant[] = [
   {
     num: 1,
     name: "The Cartographer",
@@ -66,7 +74,7 @@ export default function ClaudeDesignsPage() {
         </div>
 
         <div className="border-t border-zinc-900">
-          {variants.map((variant) => (
+          {variants.map((variant: ClaudeVariant) => (
             <Link
               key={variant.num}
               href={`/designs/claude/${variant.num}`}

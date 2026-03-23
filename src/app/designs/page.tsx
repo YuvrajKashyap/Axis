@@ -1,6 +1,12 @@
 import Link from "next/link";
 
-const providers = [
+type DesignProvider = {
+  slug: string;
+  name: string;
+  description: string;
+};
+
+const providers: DesignProvider[] = [
   {
     slug: "claude",
     name: "Claude",
@@ -31,7 +37,7 @@ export default function DesignsIndex() {
         </div>
 
         <div className="border-t border-zinc-900">
-          {providers.map((provider) => (
+          {providers.map((provider: DesignProvider) => (
             <Link
               key={provider.slug}
               href={`/designs/${provider.slug}`}

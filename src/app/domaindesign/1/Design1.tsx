@@ -5,6 +5,11 @@ import Link from "next/link";
 import type { SampleDomain } from "../data";
 import "./design1.css";
 
+type DesignRow = {
+  label: string;
+  value: string | null;
+};
+
 function hexToRgb(hex: string) {
   const h = hex.replace("#", "");
   return {
@@ -31,7 +36,7 @@ export function Design1({ domain }: { domain: SampleDomain }) {
     return () => clearTimeout(t);
   }, []);
 
-  const rows = [
+  const rows: DesignRow[] = [
     { label: "Vision", value: domain.vision },
     { label: "Reason", value: domain.primaryReason },
     { label: "Cost", value: domain.primaryCost ?? domain.currentReality },
@@ -127,7 +132,7 @@ export function Design1({ domain }: { domain: SampleDomain }) {
 
         {/* Content rows */}
         <div className="max-w-2xl mx-auto px-8 pb-12">
-          {rows.map((row, i) => {
+          {rows.map((row: DesignRow, i: number) => {
             const isExpanded = expanded === i;
             const hasValue = !!row.value;
             return (

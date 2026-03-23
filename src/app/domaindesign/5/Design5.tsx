@@ -5,6 +5,11 @@ import Link from "next/link";
 import type { SampleDomain } from "../data";
 import "./design5.css";
 
+type DesignField = {
+  label: string;
+  value: string | null;
+};
+
 function hexToRgb(hex: string) {
   const h = hex.replace("#", "");
   return {
@@ -33,7 +38,7 @@ export function Design5({ domain }: { domain: SampleDomain }) {
     return () => clearTimeout(t);
   }, []);
 
-  const fields = [
+  const fields: DesignField[] = [
     { label: "Vision", value: domain.vision },
     { label: "Reason", value: domain.primaryReason },
     { label: "Cost", value: domain.primaryCost ?? domain.currentReality },
@@ -114,11 +119,11 @@ export function Design5({ domain }: { domain: SampleDomain }) {
             }`}
             style={{ transitionDelay: "800ms" }}
           >
-            {fields.map((f, i) => {
+            {fields.map((field: DesignField, i: number) => {
               const isSelected = selected === i;
               return (
                 <button
-                  key={f.label}
+                  key={field.label}
                   onClick={() => setSelected(isSelected ? null : i)}
                   className="relative py-3 transition-all duration-500 group"
                 >
@@ -130,7 +135,7 @@ export function Design5({ domain }: { domain: SampleDomain }) {
                         : `rgba(${r},${g},${b},0.3)`,
                     }}
                   >
-                    {f.label}
+                    {field.label}
                   </span>
                   {/* Active indicator */}
                   <div

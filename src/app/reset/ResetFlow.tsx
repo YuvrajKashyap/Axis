@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { submitResetCommitments } from "./actions";
 
-type Domain = {
+type ResetDomain = {
   id: string;
   name: string;
   slug: string;
@@ -13,7 +13,12 @@ type Domain = {
   color: string | null;
 };
 
-export function ResetFlow({ domains }: { domains: Domain[] }) {
+type ResetCommitmentEntry = {
+  domainId: string;
+  text: string;
+};
+
+export function ResetFlow({ domains }: { domains: ResetDomain[] }) {
   const [step, setStep] = useState(0);
   const [commitments, setCommitments] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
@@ -52,18 +57,18 @@ export function ResetFlow({ domains }: { domains: Domain[] }) {
           </div>
 
           <div className="space-y-3">
-            {domains.map((d) => {
-              const text = commitments[d.id];
+            {domains.map((domain: ResetDomain) => {
+              const text = commitments[domain.id];
               if (!text) return null;
               return (
                 <div
-                  key={d.id}
+                  key={domain.id}
                   className="rounded-xl border border-zinc-800 bg-zinc-950 px-5 py-4"
                 >
                   <p className="text-[10px] font-mono tracking-[0.2em] uppercase mb-2"
-                    style={{ color: d.color ?? "#67e8f9" }}
+                    style={{ color: domain.color ?? "#67e8f9" }}
                   >
-                    {d.name}
+                    {domain.name}
                   </p>
                   <p className="text-sm text-zinc-200">{text}</p>
                 </div>
@@ -92,9 +97,12 @@ export function ResetFlow({ domains }: { domains: Domain[] }) {
   function handleNext() {
     if (isLast) {
       // Submit all commitments
-      const entries = Object.entries(commitments)
-        .filter(([, v]) => v.trim())
-        .map(([domainId, text]) => ({ domainId, text: text.trim() }));
+      const entries: ResetCommitmentEntry[] = Object.entries(commitments)
+        .filter(([, value]: [string, string]) => value.trim())
+        .map(([domainId, text]: [string, string]) => ({
+          domainId,
+          text: text.trim(),
+        }));
 
       startTransition(async () => {
         await submitResetCommitments(entries);
@@ -114,9 +122,15 @@ export function ResetFlow({ domains }: { domains: Domain[] }) {
     });
 
     if (isLast) {
-      const entries = Object.entries(commitments)
-        .filter(([k, v]) => k !== current.id && v.trim())
-        .map(([domainId, text]) => ({ domainId, text: text.trim() }));
+      const entries: ResetCommitmentEntry[] = Object.entries(commitments)
+        .filter(
+          ([domainId, text]: [string, string]) =>
+            domainId !== current.id && text.trim(),
+        )
+        .map(([domainId, text]: [string, string]) => ({
+          domainId,
+          text: text.trim(),
+        }));
 
       startTransition(async () => {
         if (entries.length > 0) {

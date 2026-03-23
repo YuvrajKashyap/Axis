@@ -161,6 +161,11 @@ type OrreryProps = {
   demoUserId?: string;
 };
 
+type IndexedDomain = {
+  domain: DomainData;
+  index: number;
+};
+
 export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo = false, demoUserId }: OrreryProps) {
   const router = useRouter();
   const [stars, setStars] = useState<Star[]>([]);
@@ -173,7 +178,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
     if (editingDemo && demoUserId) params.set("demoUser", demoUserId);
     if (extra) {
       const extraParams = new URLSearchParams(extra);
-      extraParams.forEach((v, k) => params.set(k, v));
+      extraParams.forEach((value: string, key: string) => params.set(key, value));
     }
     const qs = params.toString();
     return qs ? `${base}?${qs}` : base;
@@ -188,11 +193,11 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
   const [radii, setRadii] = useState<number[]>(() => {
     let driftIdx = 0;
     let archiveIdx = 0;
-    return domains.map((d, i) => {
-      const es = effectiveStatus(d.status);
+    return domains.map((domain: DomainData, i: number) => {
+      const es = effectiveStatus(domain.status);
       if (es === "ARCHIVED") return ARCHIVE_BASE_RADIUS + (archiveIdx++ * 0.04);
       if (es === "DRIFTING") return DRIFT_BASE_RADIUS + (driftIdx++ * 0.04);
-      return validOrbit(d.positionX) ?? getDefaultOrbit(i);
+      return validOrbit(domain.positionX) ?? getDefaultOrbit(i);
     });
   });
   const [dragging, setDragging] = useState<number | null>(null);
@@ -201,7 +206,9 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
   const containerRef = useRef<HTMLDivElement>(null);
   const armRefs = useRef<(HTMLDivElement | null)[]>([]);
   const ringRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const anglesRef = useRef<number[]>(domains.map((_, i) => getInitialAngle(i)));
+  const anglesRef = useRef<number[]>(
+    domains.map((_: DomainData, i: number) => getInitialAngle(i)),
+  );
   const radiiRef = useRef<number[]>(radii);
   const sizeRef = useRef(700);
   const rafRef = useRef(0);
@@ -215,15 +222,15 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
   // Sync radii & angles when domains are added or removed
   useEffect(() => {
     if (domains.length !== radiiRef.current.length) {
-      const newRadii = domains.map((d, i) => {
+      const newRadii = domains.map((domain: DomainData, i: number) => {
         // Keep existing values for domains we already have
         if (i < radiiRef.current.length) return radiiRef.current[i];
-        const es = effectiveStatus(d.status);
+        const es = effectiveStatus(domain.status);
         if (es === "ARCHIVED") return ARCHIVE_BASE_RADIUS + Math.random() * 0.06;
         if (es === "DRIFTING") return DRIFT_BASE_RADIUS + Math.random() * 0.06;
         return MIN_ORBIT + Math.random() * (MAX_ORBIT - MIN_ORBIT);
       });
-      const newAngles = domains.map((_, i) => {
+      const newAngles = domains.map((_: DomainData, i: number) => {
         if (i < anglesRef.current.length) return anglesRef.current[i];
         return Math.random() * Math.PI * 2;
       });
@@ -441,7 +448,9 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
         if (dIdx !== null) {
           if (hasDraggedRef.current) {
             const newR = radiiRef.current[dIdx];
-            setRadii((prev) => prev.map((r, i) => (i === dIdx ? newR : r)));
+            setRadii((prev) =>
+              prev.map((radius: number, i: number) => (i === dIdx ? newR : radius)),
+            );
             updateOrbit(
               domains[dIdx].id,
               newR,
@@ -465,10 +474,17 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
   /* ── Keyboard navigation (1–9) ──────────────────────────── */
 
   // Build sorted list of navigable (non-archived) domains by orbit proximity
-  const navigable = domains
-    .map((d, i) => ({ d, i }))
-    .filter(({ d }) => effectiveStatus(d.status) !== "ARCHIVED")
-    .sort((a, b) => radii[a.i] - radii[b.i]);
+  const navigable: IndexedDomain[] = domains
+    .map(
+      (domain: DomainData, index: number): IndexedDomain => ({ domain, index }),
+    )
+    .filter(
+      ({ domain }: IndexedDomain) =>
+        effectiveStatus(domain.status) !== "ARCHIVED",
+    )
+    .sort(
+      (a: IndexedDomain, b: IndexedDomain) => radii[a.index] - radii[b.index],
+    );
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -476,7 +492,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
       if (key >= 1 && key <= 9) {
         const target = navigable[key - 1];
         if (target) {
-          router.push(isDemo ? "/login" : domainUrl(target.d.slug));
+          router.push(isDemo ? "/login" : domainUrl(target.domain.slug));
         }
       }
     };
@@ -491,21 +507,21 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
 
       {/* ── Stars ──────────────────────────────────────────── */}
       <div className="fixed inset-0 pointer-events-none" aria-hidden>
-        {stars.map((s, i) => (
+        {stars.map((star: Star, i: number) => (
           <span
             key={i}
-            className={s.twinkle ? "star-twinkle" : undefined}
+            className={star.twinkle ? "star-twinkle" : undefined}
             style={{
               position: "absolute",
-              left: `${s.x}%`,
-              top: `${s.y}%`,
-              width: s.size,
-              height: s.size,
+              left: `${star.x}%`,
+              top: `${star.y}%`,
+              width: star.size,
+              height: star.size,
               borderRadius: "50%",
-              backgroundColor: s.hue,
-              opacity: s.opacity,
-              ["--twinkle-duration" as string]: `${s.twinkleDuration}s`,
-              ["--twinkle-delay" as string]: `${s.twinkleDelay}s`,
+              backgroundColor: star.hue,
+              opacity: star.opacity,
+              ["--twinkle-duration" as string]: `${star.twinkleDuration}s`,
+              ["--twinkle-delay" as string]: `${star.twinkleDelay}s`,
             }}
           />
         ))}
@@ -623,12 +639,12 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
             }}
           >
             {/* Orbit rings */}
-            {domains.map((d, i) => {
-              const es = effectiveStatus(d.status);
-              const cfg = getDomainCfg(d);
+            {domains.map((domain: DomainData, i: number) => {
+              const es = effectiveStatus(domain.status);
+              const cfg = getDomainCfg(domain);
               return (
                 <div
-                  key={`ring-${d.id}`}
+                  key={`ring-${domain.id}`}
                   ref={(el) => { ringRefs.current[i] = el; }}
                   className={`absolute rounded-full orbit-ring-shimmer ${
                     es === "ARCHIVED" ? "border-dotted" : es === "DRIFTING" ? "border-dashed" : "border-solid"
@@ -661,8 +677,8 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                 const newAngles = [...anglesRef.current];
                 const updates: { id: string; radius: number }[] = [];
 
-                domains.forEach((d, i) => {
-                  const es = effectiveStatus(d.status);
+                domains.forEach((domain: DomainData, i: number) => {
+                  const es = effectiveStatus(domain.status);
                   newAngles[i] = Math.random() * Math.PI * 2;
                   if (es === "ARCHIVED") {
                     const r = ARCHIVE_BASE_RADIUS + Math.random() * 0.08;
@@ -677,7 +693,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                   // Active: randomize orbit radius and angle
                   const r = MIN_ORBIT + Math.random() * (MAX_ORBIT - MIN_ORBIT);
                   newRadii[i] = r;
-                  updates.push({ id: d.id, radius: r });
+                  updates.push({ id: domain.id, radius: r });
                 });
 
                 radiiRef.current = newRadii;
@@ -757,16 +773,16 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
             )}
 
             {/* Planet arms */}
-            {domains.map((d, i) => {
-              const es = effectiveStatus(d.status);
-              const cfg = getDomainCfg(d);
+            {domains.map((domain: DomainData, i: number) => {
+              const es = effectiveStatus(domain.status);
+              const cfg = getDomainCfg(domain);
               const isArchived = es === "ARCHIVED";
               const isDrifting = es === "DRIFTING";
               const isDraggingThis = dragging === i;
               const dot = planetSize(radii[i], es);
               return (
                 <div
-                  key={`arm-${d.id}`}
+                  key={`arm-${domain.id}`}
                   ref={(el) => { armRefs.current[i] = el; }}
                   className="absolute"
                   style={{
@@ -835,7 +851,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                           textShadow: isDrifting ? "0 0 8px rgba(248,113,113,0.4)" : "none",
                         }}
                       >
-                        {d.name}
+                        {domain.name}
                       </p>
                       {(isDrifting || isArchived) && (
                         <p
@@ -866,9 +882,14 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
           </p>
 
           {(() => {
-            const alignable = domains.filter((d) => effectiveStatus(d.status) !== "ARCHIVED");
+            const alignable: DomainData[] = domains.filter(
+              (domain: DomainData) =>
+                effectiveStatus(domain.status) !== "ARCHIVED",
+            );
             if (alignable.length === 0) return null;
-            const slugs = alignable.map((d) => d.slug).join(",");
+            const slugs = alignable
+              .map((domain: DomainData) => domain.slug)
+              .join(",");
             return (
               <Link
                 href={isDemo ? "/login" : domainUrl(alignable[0].slug, `align=${encodeURIComponent(slugs)}&idx=0`)}

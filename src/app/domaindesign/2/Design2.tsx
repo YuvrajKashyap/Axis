@@ -5,6 +5,12 @@ import Link from "next/link";
 import type { SampleDomain } from "../data";
 import "./design2.css";
 
+type DesignCard = {
+  label: string;
+  sub: string;
+  value: string | null;
+};
+
 function hexToRgb(hex: string) {
   const h = hex.replace("#", "");
   return {
@@ -31,7 +37,7 @@ export function Design2({ domain }: { domain: SampleDomain }) {
     return () => clearTimeout(t);
   }, []);
 
-  const cards = [
+  const cards: DesignCard[] = [
     { label: "Vision", sub: "Where this leads", value: domain.vision },
     { label: "Reason", sub: "Why it matters", value: domain.primaryReason },
     { label: "Cost", sub: "Price of inaction", value: domain.primaryCost ?? domain.currentReality },
@@ -106,7 +112,7 @@ export function Design2({ domain }: { domain: SampleDomain }) {
 
         {/* Cards */}
         <div className="max-w-4xl mx-auto px-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-          {cards.map((card, i) => {
+          {cards.map((card: DesignCard, i: number) => {
             const isHovered = hovered === i;
             const hasValue = !!card.value;
             return (

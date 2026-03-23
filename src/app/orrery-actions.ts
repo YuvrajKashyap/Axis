@@ -5,6 +5,11 @@ import { auth } from "@/lib/auth";
 import { getOrCreateDemoUserId, isAdmin } from "@/lib/get-data";
 import { revalidatePath } from "next/cache";
 
+type OrbitUpdate = {
+  id: string;
+  radius: number;
+};
+
 async function getAuthorizedTargetUserId(targetUserId?: string) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -47,7 +52,7 @@ export async function updateOrbit(
 }
 
 export async function resetOrbits(
-  updates: { id: string; radius: number }[],
+  updates: OrbitUpdate[],
   targetUserId?: string,
 ) {
   if (updates.length === 0) {
@@ -60,10 +65,10 @@ export async function resetOrbits(
   }
 
   await Promise.all(
-    updates.map((u) =>
+    updates.map((update: OrbitUpdate) =>
       prisma.domain.updateMany({
-        where: { id: u.id, userId },
-        data: { positionX: u.radius },
+        where: { id: update.id, userId },
+        data: { positionX: update.radius },
       }),
     ),
   );
