@@ -1,192 +1,280 @@
 # Axis
 
-Personal alignment system. Define the areas of life that matter to you, track your commitments, and see when you're drifting.
+A personal alignment system built around life domains, commitments, and execution.
 
-Your domains orbit a central sun like planets in a solar system. Stay consistent and they stay close. Neglect them and they drift out.
+Axis is not a task manager, habit tracker, or productivity feed. It is designed to help a user quickly regain clarity across the areas of life that matter most, commit to a concrete next action, and leave the app to execute.
 
-**Open** your system. See where you stand.
-**Align** by writing one commitment per domain. Not a plan. An action.
-**Execute** and come back when you're ready for the next one.
+Core loop: Open → Align → Execute
 
-No feeds. No notifications. No streaks. No gamification.
+## Why I built it
 
----
+Most productivity tools optimize for retention, complexity, or organizational sprawl. Axis is built around a different idea:
 
-## Why this exists
+- represent major life areas as living domains
+- make drift visible
+- reduce each session to one meaningful commitment
+- push the user back into action instead of deeper app usage
 
-Most productivity tools focus on organizing tasks. Very few help when you feel scattered, conflicted, or unsure what actually matters.
+The result is a personal operating system centered on alignment, not engagement.
 
-Axis treats life as a set of domains: health, career, relationships, a side project, whatever you care about. Each one can drift over time. The goal is to make that visible and actionable.
+## What the app does
 
-This started as something I wanted for myself. There are days where everything feels slightly off. Not terrible, just unclear. I wanted a tool I could open that would help me reset quickly, figure out what actually matters, and move forward.
+Axis gives each user a personal orrery: a solar-system-inspired interface where domains orbit around a central sun.
 
-Axis is not meant to keep you inside the app. It is meant to help you get clear and then leave to execute in real life.
+From there, users can:
 
----
+- create and manage life domains
+- visually inspect domain status and drift
+- open a domain and write a one-line commitment
+- use a guided reset flow across multiple domains
+- return to action immediately after committing
+
+It is intentionally minimal:
+
+- no feeds
+- no notifications
+- no streaks
+- no gamification
+- no generic dashboard clutter
+
+## Core user experience
+
+### Homepage / Orrery
+
+After signing in, users land on a personalized orrery showing their domains as planets orbiting a central sun.
+
+The homepage supports:
+
+- clicking a domain to enter its detail page
+- dragging active planets to adjust orbit radius
+- resetting active orbits from the sun
+- keyboard navigation
+- starting an alignment flow across domains
+
+### Domain detail
+
+Each domain has a dedicated page with:
+
+- name
+- identity
+- vision
+- primary reason
+- primary cost
+- color
+- status
+- commitment input
+- recent commitment history
+
+Users can also edit the domain directly from this view.
+
+### Commitment flow
+
+The core interaction is a single action input:
+
+Today I will...
+
+Submitting a commitment triggers a full-screen quote overlay and routes the user either:
+
+- back to the homepage
+- to the next domain in the alignment chain
+
+### Reset flow
+
+Axis includes a guided reset flow at /reset that steps through all non-archived domains one at a time, allowing the user to enter a commitment for each.
 
 ## Features
 
-- Interactive orrery (solar system) visualization with draggable planets
-- Per-user domains with custom colors, identity, vision, reason, and cost
-- Commitment tracking per domain
-- Auto-drift: planets move out of orbit after 72 hours without a commitment
-- Archive domains to put them on hold
-- Align flow: guided reset through all active domains
-- Multi-user auth with email and password
-- Admin-controlled demo orrery for visitors who haven't signed in
-- Quote overlay on commitment with 500 action-focused quotes
-- Custom dark-themed HSV color picker
-- Keyboard navigation (1-9 keys, Escape)
-- Mobile responsive with full touch support
+### User system
 
----
+- email and password sign up
+- email and password sign in
+- per-user data isolation
+- JWT-based session handling via Auth.js
+
+### Domain system
+
+- create domains from homepage
+- per-user slugs
+- rename and delete domains
+- edit identity, vision, primary reason, primary cost
+- set color and status
+- status types: ALIGNED, DRIFTING, ARCHIVED
+
+### Orrery
+
+- animated solar-system UI
+- draggable planets with persisted orbit radius
+- orbit reset from the sun
+- visual distinction between domain states
+- automatic drift based on latest commitment
+
+### Commitments
+
+- create one-line commitments
+- view history
+- clear history
+- batch submission through reset flow
+
+### Alignment
+
+- Align entrypoint from homepage
+- sequential domain flow
+- one commitment per domain
+
+### Demo + admin
+
+- public demo mode
+- internal demo user
+- admin-only edit path
+
+### Design exploration
+
+- /designs/*
+- /domaindesign/*
+- /signupdesign/*
 
 ## Tech stack
 
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 16 (App Router, React 19, Server Components) |
-| Styling | Tailwind CSS 4 |
-| Database | PostgreSQL via Prisma ORM 7 |
-| Auth | NextAuth v5 (Auth.js), credentials provider, JWT sessions |
-| Passwords | bcryptjs |
-| Typography | Geist, Geist Mono, Playfair Display |
-| Language | TypeScript 5 |
+- Next.js 16 App Router
+- TypeScript
+- React 19
+- Tailwind CSS 4
+- PostgreSQL
+- Prisma ORM
+- Auth.js credentials auth
+- bcryptjs
+- Geist + Playfair fonts
 
----
+## Architecture
 
-## Getting started
+- App Router structure under src/app
+- server components for data loading
+- client components for UI
+- server actions for mutations
+- Prisma used directly
+- global Prisma singleton
+- route-level mutation handling
 
-### Prerequisites
+### Routes
 
-- Node.js 18+
-- PostgreSQL database running locally or hosted
+- / homepage
+- /login auth
+- /domain/[slug] domain detail
+- /reset reset flow
+- /how product explanation
+- /designs/* UI experiments
 
-### Setup
+## Database
 
-```bash
-git clone https://github.com/YuvrajKashyap/Axis.git
-cd Axis
+### User
+- id, email, password, name, timestamps
 
+### Domain
+- userId, name, slug
+- identity, vision
+- primaryReason, primaryCost
+- nextMove, currentReality, standard, proof
+- color, status
+- positionX, positionY, positionZ
+
+Unique: userId + slug
+
+### Commitment
+- userId, domainId, text, completed, timestamps
+
+### UserSettings
+- theme
+
+## Auth
+
+- credentials-based auth
+- JWT sessions
+- session.user.id from token
+
+### Isolation
+
+- queries scoped by userId
+- domain access scoped by userId + slug
+- write actions verify ownership
+- reset flow validates domain ownership
+
+## Security
+
+App enforces user scoping at the application layer. Database-level policies should be configured for full production hardening.
+
+## Local setup
+
+Install:
 npm install
-```
 
-Create a `.env` file in the root:
+Env:
+DATABASE_URL=your_postgres_connection_string
+AUTH_SECRET=your_auth_secret
+ADMIN_EMAIL=optional
 
-```env
-DATABASE_URL="postgresql://user:password@localhost:5432/axis"
-AUTH_SECRET="generate-with-npx-auth-secret"
-ADMIN_EMAIL="your@email.com"
-```
-
-Then:
-
-```bash
+Prisma:
 npx prisma generate
-npx prisma db push
-npm run dev
-```
+npx prisma migrate deploy
 
-Open [http://localhost:3000](http://localhost:3000).
-
-### Optional: seed sample data
-
-```bash
+Optional seed:
 npm run seed
-```
 
----
+Run:
+npm run dev
 
-## Environment variables
-
-| Variable | Description | Required |
-|---|---|---|
-| `DATABASE_URL` | PostgreSQL connection string | Yes |
-| `AUTH_SECRET` | NextAuth secret for JWT signing. Generate with `npx auth secret` | Yes |
-| `ADMIN_EMAIL` | Email of the admin account. Their orrery becomes the public demo for logged-out visitors | No |
-
----
-
-## Database schema
-
-| Model | Purpose |
-|---|---|
-| **User** | Accounts with email/password auth |
-| **Domain** | Life areas (planets), scoped per user. Compound unique on userId + slug |
-| **Commitment** | Actions committed per domain. Used to calculate drift |
-| **UserSettings** | Per-user preferences |
-
-Domain status enum: `ALIGNED`, `NEUTRAL`, `DRIFTING`, `ARCHIVED`.
-
-Drift is computed at read time. If the most recent commitment in a domain is older than 72 hours, the domain's effective status becomes `DRIFTING` regardless of its stored status.
-
----
-
-## Project structure
-
-```
-src/
-  app/
-    page.tsx              # Homepage: orrery or demo
-    Orrery.tsx            # Solar system visualization (client component)
-    orrery-actions.ts     # Server actions for orbit updates and domain creation
-    orrery.css            # Orrery-specific styles and animations
-    domain/[slug]/        # Domain detail page with commitments and editing
-      DomainView.tsx      # Domain client component (color picker, edit mode, quotes)
-      actions.ts          # Server actions for domain CRUD
-      quotes.ts           # 500 action-focused quotes
-      domain.css          # Domain page animations
-    reset/                # Align flow: guided commitment entry across all domains
-    login/                # Auth page with signup and signin
-    how/                  # Explanation page
-    api/auth/             # NextAuth API route handler
-  lib/
-    auth.ts               # NextAuth configuration
-    auth-actions.ts       # Server actions for signup, login, logout
-    prisma.ts             # Prisma client singleton
-    get-data.ts           # Data fetching with drift computation
-    demo-data.ts          # Fallback demo domains if no admin account exists
-prisma/
-    schema.prisma         # Database schema
-    seed.ts               # Optional seed script
-```
-
----
-
-## How auth works
-
-1. Users sign up with name, email, and password (hashed with bcrypt)
-2. Sessions use JWT strategy via NextAuth v5
-3. All data queries are scoped by the authenticated user's ID from the session
-4. Logged-out visitors see the admin's orrery as a read-only demo (configurable via `ADMIN_EMAIL`)
-5. If no admin account exists, a hardcoded fallback demo is shown
-
----
+Build:
+npm run build
 
 ## Deployment
 
-Built for Vercel.
+Required env vars:
 
-1. Push code to GitHub
-2. Import the repo on [vercel.com](https://vercel.com)
-3. Add environment variables (`DATABASE_URL`, `AUTH_SECRET`, `ADMIN_EMAIL`)
-4. Deploy
+- DATABASE_URL
+- AUTH_SECRET
+- ADMIN_EMAIL optional
 
-For the database, use a hosted PostgreSQL provider like Neon, Supabase, or Railway.
+Apply migrations:
+npx prisma migrate deploy
 
-```bash
-# Always verify the build passes before deploying
-npm run build
-```
+## Notable details
 
----
+- orrery built with DOM and requestAnimationFrame
+- orbit persistence
+- drift computed dynamically
+- quote overlay after commit
+- align flow uses query state
+- multi-user via relational ownership
 
-## Author
+## Limitations
 
-Yuvraj Kashyap
+- some schema fields unused in UI
+- design routes exist in production
+- no automated tests
+- some personalized copy remains
+- some sandbox routes query live data
 
----
+## Status
+
+Axis is a fully shipped full-stack product with:
+
+- auth
+- multi-user system
+- database persistence
+- interactive UI
+- reset system
+- production deployment
+
+Represents full lifecycle:
+
+- idea
+- spec
+- architecture
+- UI exploration
+- build
+- auth
+- database
+- deployment
 
 ## License
 
-Private project.
+Private project unless otherwise specified.
