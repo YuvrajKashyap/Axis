@@ -24,7 +24,15 @@ export default async function Design2() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const domains = await getDomains(session.user.id);
+  const domains: {
+    id: string;
+    slug: string;
+    name: string;
+    identity: string | null;
+    status: "ALIGNED" | "NEUTRAL" | "DRIFTING" | "ARCHIVED";
+    positionX: number | null;
+    positionY: number | null;
+}[] = await getDomains(session.user.id);
 
   const now = new Date();
   const timeCode = now.toISOString().slice(0, 19).replace("T", " ");
