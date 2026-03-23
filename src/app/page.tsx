@@ -1,21 +1,28 @@
-import { getDomains, getDemoDomains, isAdmin, getOrCreateDemoUserId } from "@/lib/get-data";
+import {
+  getDomains,
+  getDemoDomains,
+  isAdmin,
+  getOrCreateDemoUserId,
+  type DomainList,
+  type DomainListItem,
+} from "@/lib/get-data";
 import { auth } from "@/lib/auth";
 import { Orrery } from "./Orrery";
 import type { DomainData } from "./Orrery";
 import { DEMO_DOMAINS } from "@/lib/demo-data";
 
-function toOrreryData(domains: Awaited<ReturnType<typeof getDomains>>): DomainData[] {
-  return domains.map((d) => ({
-    id: d.id,
-    name: d.name,
-    slug: d.slug,
-    status: d.effectiveStatus as DomainData["status"],
-    identity: d.identity,
-    nextMove: d.nextMove,
-    primaryReason: d.primaryReason,
-    positionX: d.positionX,
-    color: d.color ?? null,
-    autoDrifted: d.autoDrifted,
+function toOrreryData(domains: DomainList): DomainData[] {
+  return domains.map((domain: DomainListItem) => ({
+    id: domain.id,
+    name: domain.name,
+    slug: domain.slug,
+    status: domain.effectiveStatus as DomainData["status"],
+    identity: domain.identity,
+    nextMove: domain.nextMove,
+    primaryReason: domain.primaryReason,
+    positionX: domain.positionX,
+    color: domain.color ?? null,
+    autoDrifted: domain.autoDrifted,
   }));
 }
 

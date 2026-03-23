@@ -19,8 +19,8 @@ export async function getDomains(userId: string) {
     },
   });
 
-  return domains.map((d) => {
-    const lastCommitmentAt = d.commitments[0]?.createdAt ?? null;
+  return domains.map((domain: (typeof domains)[number]) => {
+    const lastCommitmentAt = domain.commitments[0]?.createdAt ?? null;
     const isStale =
       !lastCommitmentAt ||
       Date.now() - lastCommitmentAt.getTime() > DRIFT_THRESHOLD_MS;
@@ -28,14 +28,14 @@ export async function getDomains(userId: string) {
     // ARCHIVED takes precedence — never auto-drift archived domains
     // Only auto-drift if user's explicit status is active (ALIGNED/NEUTRAL)
     const autoDrifted =
-      d.status !== "DRIFTING" &&
-      d.status !== "ARCHIVED" &&
+      domain.status !== "DRIFTING" &&
+      domain.status !== "ARCHIVED" &&
       isStale;
 
-    const effectiveStatus = autoDrifted ? "DRIFTING" : d.status;
+    const effectiveStatus = autoDrifted ? "DRIFTING" : domain.status;
 
     return {
-      ...d,
+      ...domain,
       effectiveStatus: effectiveStatus as "ALIGNED" | "NEUTRAL" | "DRIFTING" | "ARCHIVED",
       lastCommitmentAt,
       autoDrifted,
