@@ -9,23 +9,9 @@ type DomainPageProps = {
   searchParams: Promise<{ align?: string; idx?: string; demoUser?: string }>;
 };
 
-export default async function DomainDetailPage({ params, searchParams }: DomainPageProps) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
-  const { slug } = await params;
-  const { align, idx, demoUser } = await searchParams;
-
-  // If demoUser param is set, admin is editing the demo orrery
-  let targetUserId = session.user.id;
-  if (demoUser) {
-    const admin = await isAdmin(session.user.email);
-    if (!admin) redirect("/");
-    targetUserId = demoUser;
-  }
-
-  const domain = await prisma.domain.findUnique({
-    where: { userId_slug: { userId: targetUserId, slug } },
+async function getDomainDetail(userId: string, slug: string) {
+  return prisma.domain.findUnique({
+    where: { userId_slug: { userId, slug } },
     select: {
       id: true,
       name: true,
@@ -48,6 +34,27 @@ export default async function DomainDetailPage({ params, searchParams }: DomainP
       },
     },
   });
+}
+
+type DomainDetail = NonNullable<Awaited<ReturnType<typeof getDomainDetail>>>;
+type DomainCommitment = DomainDetail["commitments"][number];
+
+export default async function DomainDetailPage({ params, searchParams }: DomainPageProps) {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
+  const { slug } = await params;
+  const { align, idx, demoUser } = await searchParams;
+
+  // If demoUser param is set, admin is editing the demo orrery
+  let targetUserId = session.user.id;
+  if (demoUser) {
+    const admin = await isAdmin(session.user.email);
+    if (!admin) redirect("/");
+    targetUserId = demoUser;
+  }
+
+  const domain = await getDomainDetail(targetUserId, slug);
 
   if (!domain) notFound();
 
@@ -58,9 +65,9 @@ export default async function DomainDetailPage({ params, searchParams }: DomainP
   return (
     <DomainView
       domain={domain}
-      commitments={domain.commitments.map((c) => ({
-        ...c,
-        createdAt: c.createdAt.toISOString(),
+      commitments={domain.commitments.map((commitment: DomainCommitment) => ({
+        ...commitment,
+        createdAt: commitment.createdAt.toISOString(),
       }))}
       alignChain={alignSlugs}
       alignIdx={alignIdx}
