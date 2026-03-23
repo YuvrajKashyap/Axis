@@ -43,6 +43,10 @@ export async function getDomains(userId: string) {
   });
 }
 
+export type DomainList = Awaited<ReturnType<typeof getDomains>>;
+export type DomainListItem = DomainList[number];
+export type DomainListStatus = DomainListItem["status"];
+
 const DEMO_EMAIL = "demo@axis.internal";
 
 export async function getOrCreateDemoUserId(): Promise<string | null> {

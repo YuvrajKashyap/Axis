@@ -1,26 +1,27 @@
-import { getDomains } from "@/lib/get-data";
+import { getDomains, type DomainListStatus } from "@/lib/get-data";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-type DomainStatus = "ALIGNED" | "NEUTRAL" | "DRIFTING";
-
-const statusDot: Record<DomainStatus, string> = {
+const statusDot: Record<DomainListStatus, string> = {
   ALIGNED: "bg-white",
   NEUTRAL: "bg-amber-400",
   DRIFTING: "bg-red-400",
+  ARCHIVED: "bg-zinc-600",
 };
 
-const statusGlow: Record<DomainStatus, string> = {
+const statusGlow: Record<DomainListStatus, string> = {
   ALIGNED: "0 0 16px rgba(255,255,255,0.5), 0 0 32px rgba(255,255,255,0.15)",
   NEUTRAL: "0 0 16px rgba(251,191,36,0.5), 0 0 32px rgba(251,191,36,0.15)",
   DRIFTING: "0 0 16px rgba(248,113,113,0.4), 0 0 32px rgba(248,113,113,0.1)",
+  ARCHIVED: "0 0 12px rgba(113,113,122,0.35), 0 0 24px rgba(113,113,122,0.08)",
 };
 
-const statusText: Record<DomainStatus, string> = {
+const statusText: Record<DomainListStatus, string> = {
   ALIGNED: "text-zinc-400",
   NEUTRAL: "text-amber-400",
   DRIFTING: "text-red-400",
+  ARCHIVED: "text-zinc-600",
 };
 
 // Design 1: The Cartographer
@@ -39,15 +40,7 @@ export default async function Design1() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const domains: {
-    id: string;
-    slug: string;
-    name: string;
-    identity: string | null;
-    status: "ALIGNED" | "NEUTRAL" | "DRIFTING" | "ARCHIVED";
-    positionX: number | null;
-    positionY: number | null;
-}[] = await getDomains(session.user.id);
+  const domains = await getDomains(session.user.id);
 
   // Assign fallback positions by index if missing
   const fallbackX = [2, -1, 0];
@@ -98,7 +91,7 @@ export default async function Design1() {
       {domains.map((d, i) => {
         const px = d.positionX ?? fallbackX[i] ?? 0;
         const py = d.positionY ?? fallbackY[i] ?? 0;
-        const status = d.status as DomainStatus;
+        const status = d.status;
 
         // Flip Y so positive is "up" on screen
         const left = toPercent(px);
