@@ -1,0 +1,18 @@
+@keyframes d5-ambient-breathe {
+  0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+  50%      { opacity: 1; transform: translateX(-50%) scale(1.2); }
+}
+
+@keyframes d5-planet-glow {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.1); }
+}
+
+@keyframes d5-content-fade {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.d5-ambient { animation: d5-ambient-breathe 8s ease-in-out infinite; }
+.d5-planet { animation: d5-planet-glow 3s ease-in-out infinite; }
+.d5-content-enter { animation: d5-content-fade 0.5s ease-out forwards; }

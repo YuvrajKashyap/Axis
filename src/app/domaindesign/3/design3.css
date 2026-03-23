@@ -1,0 +1,28 @@
+@keyframes d3-ambient-breathe {
+  0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+  50%      { opacity: 1; transform: translateX(-50%) scale(1.2); }
+}
+
+@keyframes d3-planet-glow {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.1); }
+}
+
+@keyframes d3-scroll-bob {
+  0%, 100% { transform: translateY(0); opacity: 0.4; }
+  50%      { transform: translateY(6px); opacity: 0.8; }
+}
+
+.d3-ambient { animation: d3-ambient-breathe 8s ease-in-out infinite; }
+.d3-planet { animation: d3-planet-glow 3s ease-in-out infinite; }
+.d3-scroll { animation: d3-scroll-bob 2s ease-in-out infinite; }
+
+.d3-snap-container {
+  scroll-snap-type: y mandatory;
+  overflow-y: auto;
+  height: 100vh;
+}
+
+.d3-snap-section {
+  scroll-snap-align: start;
+}

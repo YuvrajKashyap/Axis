@@ -1,0 +1,12 @@
+@keyframes d4-ambient-breathe {
+  0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+  50%      { opacity: 1; transform: translateX(-50%) scale(1.15); }
+}
+
+@keyframes d4-planet-glow {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.1); }
+}
+
+.d4-ambient { animation: d4-ambient-breathe 8s ease-in-out infinite; }
+.d4-planet { animation: d4-planet-glow 3s ease-in-out infinite; }

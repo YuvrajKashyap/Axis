@@ -1,0 +1,65 @@
+/* Axis Orrery — CSS orbital animation for the solar system design variant */
+
+/* Orbit arms — each planet arm rotates around the center point */
+/* Health: inner orbit, starts upper-right (-50°), 22s period */
+@keyframes orbit-alpha {
+  from { transform: rotate(-50deg); }
+  to   { transform: rotate(310deg); }
+}
+@keyframes counter-alpha {
+  from { transform: rotate(50deg); }
+  to   { transform: rotate(-310deg); }
+}
+
+/* Career: middle orbit, starts lower-right (140°), 38s period */
+@keyframes orbit-beta {
+  from { transform: rotate(140deg); }
+  to   { transform: rotate(500deg); }
+}
+@keyframes counter-beta {
+  from { transform: rotate(-140deg); }
+  to   { transform: rotate(-500deg); }
+}
+
+/* Relationships: outer orbit, starts lower-left (230°), 58s period */
+@keyframes orbit-gamma {
+  from { transform: rotate(230deg); }
+  to   { transform: rotate(590deg); }
+}
+@keyframes counter-gamma {
+  from { transform: rotate(-230deg); }
+  to   { transform: rotate(-590deg); }
+}
+
+/* Orbit ring pulse */
+@keyframes ring-pulse {
+  0%, 100% { opacity: 0.25; }
+  50%       { opacity: 0.5; }
+}
+
+/* Sun pulse */
+@keyframes sun-breathe {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.08); }
+}
+
+/* Planet glow breathe */
+@keyframes planet-glow {
+  0%, 100% { opacity: 0.85; }
+  50%       { opacity: 1; }
+}
+
+.orbit-arm-alpha  { animation: orbit-alpha  22s linear infinite; }
+.orbit-arm-beta   { animation: orbit-beta   38s linear infinite; }
+.orbit-arm-gamma  { animation: orbit-gamma  58s linear infinite; }
+
+.counter-alpha { animation: counter-alpha 22s linear infinite; }
+.counter-beta  { animation: counter-beta  38s linear infinite; }
+.counter-gamma { animation: counter-gamma 58s linear infinite; }
+
+.ring-alpha { animation: ring-pulse 4s ease-in-out infinite; }
+.ring-beta  { animation: ring-pulse 6s ease-in-out infinite 1s; }
+.ring-gamma { animation: ring-pulse 8s ease-in-out infinite 2s; }
+
+.sun-core   { animation: sun-breathe 4s ease-in-out infinite; }
+.planet-dot { animation: planet-glow 3s ease-in-out infinite; }

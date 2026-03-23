@@ -1,0 +1,97 @@
+/* Orrery — space effects keyframes */
+
+.add-domain-btn:hover {
+  border-color: rgba(134,169,134,0.45);
+  color: rgba(134,169,134,0.85);
+  box-shadow: 0 0 10px rgba(134,169,134,0.12), 0 0 24px rgba(134,169,134,0.06);
+  transform: scale(1.05);
+}
+
+@keyframes twinkle {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(3); }
+}
+
+@keyframes sun-core-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50%      { transform: scale(1.15); opacity: 1; }
+}
+
+@keyframes sun-inner-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.25; }
+  50%      { transform: scale(1.12); opacity: 0.4; }
+}
+
+@keyframes sun-mid-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.12; }
+  50%      { transform: scale(1.2); opacity: 0.2; }
+}
+
+@keyframes sun-outer-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.06; }
+  50%      { transform: scale(1.3); opacity: 0.12; }
+}
+
+@keyframes ring-shimmer {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+@keyframes drift-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
+.star-twinkle {
+  animation: twinkle var(--twinkle-duration, 4s) ease-in-out infinite;
+  animation-delay: var(--twinkle-delay, 0s);
+}
+
+.sun-core-anim {
+  animation: sun-core-pulse 3s ease-in-out infinite;
+}
+
+.sun-inner-anim {
+  animation: sun-inner-pulse 4s ease-in-out infinite 0.5s;
+}
+
+.sun-mid-anim {
+  animation: sun-mid-pulse 5s ease-in-out infinite 1s;
+}
+
+.sun-outer-anim {
+  animation: sun-outer-breathe 6s ease-in-out infinite 1.5s;
+}
+
+.orbit-ring-shimmer {
+  animation: ring-shimmer var(--shimmer-duration, 6s) ease-in-out infinite;
+  animation-delay: var(--shimmer-delay, 0s);
+}
+
+.drift-glow {
+  animation: drift-pulse 2s ease-in-out infinite;
+}
+
+@keyframes archive-fade {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 0.5; }
+}
+
+.archive-drift {
+  animation: archive-fade 4s ease-in-out infinite;
+}
+
+/* Asteroid: slightly irregular shape */
+.asteroid-shape {
+  border-radius: 42% 58% 55% 45% / 50% 42% 58% 50%;
+}
+
+/* ── Align button arrow glow ──────────────── */
+
+.group:hover .align-arrow {
+  text-shadow: 0 0 6px rgba(103, 232, 249, 0.6), 0 0 16px rgba(103, 232, 249, 0.25);
+}
+
+/* Drag cursor states */
+.planet-grab { cursor: grab; }
+.planet-grab:active { cursor: grabbing; }

@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          String        @id @default(cuid())
+  email       String        @unique
+  password    String
+  name        String?
+  domains     Domain[]
+  commitments Commitment[]
+  settings    UserSettings?
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Domain {
+  id          String         @id @default(cuid())
+  userId      String
+  name        String
+  slug        String
+  description String?
+  identity    String?
+  primaryReason String?
+  primaryCost String?
+  nextMove    String?
+  vision         String?
+  currentReality String?
+  standard       String?
+  proof          String?
+  color          String?
+  status      DomainStatus   @default(NEUTRAL)
+
+  positionX   Float          @default(0)
+  positionY   Float          @default(0)
+  positionZ   Float          @default(0)
+
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commitments Commitment[]
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([userId, slug])
+}
+
+model Commitment {
+  id          String             @id @default(cuid())
+  userId      String
+  domainId    String
+  text        String
+  completed   Boolean            @default(false)
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domain      Domain             @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model UserSettings {
+  id          String      @id @default(cuid())
+  userId      String      @unique
+  theme       String      @default("dark")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+enum DomainStatus {
+  ALIGNED
+  NEUTRAL
+  DRIFTING
+  ARCHIVED
+}

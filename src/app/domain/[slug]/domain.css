@@ -1,0 +1,109 @@
+@keyframes domain-ambient-breathe {
+  0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+  50%      { opacity: 1; transform: translateX(-50%) scale(1.2); }
+}
+
+@keyframes domain-planet-glow {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.1); }
+}
+
+@keyframes domain-scroll-bob {
+  0%, 100% { transform: translateY(0); opacity: 0.4; }
+  50%      { transform: translateY(6px); opacity: 0.8; }
+}
+
+.domain-ambient { animation: domain-ambient-breathe 8s ease-in-out infinite; }
+.domain-planet { animation: domain-planet-glow 3s ease-in-out infinite; }
+.domain-scroll { animation: domain-scroll-bob 2s ease-in-out infinite; }
+
+.domain-snap-container {
+  scroll-snap-type: y mandatory;
+  overflow-y: auto;
+  height: 100vh;
+}
+
+.domain-snap-section {
+  scroll-snap-align: start;
+}
+
+@keyframes domain-overlay-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.domain-overlay-enter {
+  animation: domain-overlay-fade 0.6s ease-out forwards;
+}
+
+/* ── Color picker ── */
+
+@keyframes color-picker-enter {
+  from { opacity: 0; transform: translateX(-50%) translateY(-4px) scale(0.96); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+.color-picker-panel {
+  animation: color-picker-enter 0.2s ease-out forwards;
+}
+
+/* ── Quote overlay animations ── */
+
+@keyframes quote-shockwave-expand {
+  0%   { transform: translate(-50%, -50%) scale(0); opacity: 0.8; }
+  60%  { opacity: 0.3; }
+  100% { transform: translate(-50%, -50%) scale(4); opacity: 0; }
+}
+
+@keyframes quote-shockwave-expand-2 {
+  0%   { transform: translate(-50%, -50%) scale(0); opacity: 0.6; }
+  60%  { opacity: 0.2; }
+  100% { transform: translate(-50%, -50%) scale(3.5); opacity: 0; }
+}
+
+@keyframes quote-flash-pop {
+  0%   { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+  30%  { transform: translate(-50%, -50%) scale(1.5); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+}
+
+@keyframes quote-particle-shoot {
+  0%   { transform: translate(-50%, -50%) rotate(var(--angle)) translateX(0) scale(1); opacity: 1; }
+  60%  { opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) rotate(var(--angle)) translateX(var(--distance)) scale(0); opacity: 0; }
+}
+
+@keyframes quote-bg-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes quote-bg-collapse-out {
+  0%   { opacity: 1; clip-path: inset(0 0 0 0); }
+  60%  { opacity: 0.8; clip-path: inset(10% 5% 10% 5%); }
+  100% { opacity: 0; clip-path: inset(50% 50% 50% 50%); }
+}
+
+.quote-shockwave {
+  animation: quote-shockwave-expand 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.quote-shockwave-2 {
+  animation: quote-shockwave-expand-2 1.2s cubic-bezier(0.22, 1, 0.36, 1) 0.15s forwards;
+}
+
+.quote-flash {
+  animation: quote-flash-pop 0.8s ease-out forwards;
+}
+
+.quote-particle {
+  animation: quote-particle-shoot 1s cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0s) forwards;
+}
+
+.quote-bg-enter {
+  animation: quote-bg-fade-in 0.6s ease-out forwards;
+}
+
+.quote-bg-collapse {
+  animation: quote-bg-collapse-out 0.7s ease-in forwards;
+}

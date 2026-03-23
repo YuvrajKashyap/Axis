@@ -1,0 +1,18 @@
+@keyframes d1-ambient-breathe {
+  0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+  50%      { opacity: 1; transform: translateX(-50%) scale(1.2); }
+}
+
+@keyframes d1-planet-glow {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.1); }
+}
+
+@keyframes d1-scroll-bob {
+  0%, 100% { transform: translateY(0); opacity: 0.4; }
+  50%      { transform: translateY(6px); opacity: 0.8; }
+}
+
+.d1-ambient { animation: d1-ambient-breathe 8s ease-in-out infinite; }
+.d1-planet { animation: d1-planet-glow 3s ease-in-out infinite; }
+.d1-scroll { animation: d1-scroll-bob 2s ease-in-out infinite; }

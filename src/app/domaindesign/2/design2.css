@@ -1,0 +1,16 @@
+@keyframes d2-glow-breathe {
+  0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+  50%      { opacity: 1; transform: translateX(-50%) scale(1.15); }
+}
+
+@keyframes d2-planet-glow {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.1); }
+}
+
+.d2-glow { animation: d2-glow-breathe 8s ease-in-out infinite; }
+.d2-planet { animation: d2-planet-glow 3s ease-in-out infinite; }
+
+.d2-card {
+  backdrop-filter: blur(4px);
+}
