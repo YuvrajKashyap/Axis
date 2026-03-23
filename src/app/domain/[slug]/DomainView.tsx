@@ -235,16 +235,19 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
   const [clearing, setClearing] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(domain.status);
   const router = useRouter();
+  const [particleDistances] = useState(() =>
+    Array.from({ length: 12 }, () => 80 + Math.random() * 60),
+  );
 
   // Navigation helpers for demo-edit mode
   const homeUrl = demoUser ? "/?demo=edit" : "/";
-  const domainLink = (slug: string, extra?: string) => {
+  const domainLink = useCallback((slug: string, extra?: string) => {
     const params = new URLSearchParams();
     if (demoUser) params.set("demoUser", demoUser);
     if (extra) new URLSearchParams(extra).forEach((v, k) => params.set(k, v));
     const qs = params.toString();
     return qs ? `/domain/${slug}?${qs}` : `/domain/${slug}`;
-  };
+  }, [demoUser]);
 
   // Editing state
   const [editing, setEditing] = useState(false);
@@ -260,22 +263,22 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
   const [isDeleting, startDeleteTransition] = useTransition();
 
   // Debounced color update
-  const colorTimerRef = useState<ReturnType<typeof setTimeout> | null>(null);
+  const colorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleColorChange = useCallback((newColor: string) => {
     setCurrentColor(newColor);
-    if (colorTimerRef[0]) clearTimeout(colorTimerRef[0]);
-    colorTimerRef[0] = setTimeout(() => {
-      updateDomainColor(domain.id, newColor);
+    if (colorTimerRef.current) clearTimeout(colorTimerRef.current);
+    colorTimerRef.current = setTimeout(() => {
+      updateDomainColor(domain.id, newColor, demoUser);
     }, 400);
-  }, [domain.id, colorTimerRef]);
+  }, [demoUser, domain.id]);
 
   const handleStatusChange = useCallback((status: "ALIGNED" | "DRIFTING" | "ARCHIVED") => {
     setCurrentStatus(status);
     startTransition(async () => {
-      await updateDomainStatus(domain.id, status);
+      await updateDomainStatus(domain.id, status, demoUser);
       router.refresh();
     });
-  }, [domain.id, router, startTransition]);
+  }, [demoUser, domain.id, router, startTransition]);
 
   const isAligning = !!alignChain;
   const isLastInChain = !alignChain || alignIdx >= alignChain.length - 1;
@@ -290,28 +293,6 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
     return () => clearTimeout(t);
   }, []);
 
-  // Escape key → cancel edit or back to orrery
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (editing) {
-          setEditing(false);
-          setConfirmDelete(false);
-          setEditName(domain.name);
-          setEditIdentity(domain.identity ?? "");
-          setEditVision(domain.vision ?? "");
-          setEditReason(domain.primaryReason ?? "");
-          setEditCost(domain.primaryCost ?? "");
-        } else {
-          router.push(homeUrl);
-        }
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [router, editing, domain]);
-
   const navigateAfterQuote = useCallback(() => {
     if (isAligning && !isLastInChain && alignChain) {
       // Go to next domain in align chain
@@ -323,12 +304,12 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
       // Last in chain or standalone — go home
       router.push(homeUrl);
     }
-  }, [isAligning, isLastInChain, alignChain, alignIdx, router]);
+  }, [alignChain, alignIdx, domainLink, homeUrl, isAligning, isLastInChain, router]);
 
   const handleCommit = useCallback(() => {
     if (!text.trim()) return;
     startTransition(async () => {
-      const result = await createCommitment(domain.id, text.trim());
+      const result = await createCommitment(domain.id, text.trim(), demoUser);
       if (result.success) {
         setText("");
         setQuoteText(getRandomQuote());
@@ -345,7 +326,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
         }, 6200);
       }
     });
-  }, [text, domain.id, startTransition, navigateAfterQuote]);
+  }, [text, demoUser, domain.id, startTransition, navigateAfterQuote]);
 
   const handleSkip = useCallback(() => {
     if (isAligning) {
@@ -356,18 +337,18 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
   const handleClear = useCallback(() => {
     setClearing(true);
     startTransition(async () => {
-      await clearCommitments(domain.id);
+      await clearCommitments(domain.id, demoUser);
       setShowHistory(false);
       setClearing(false);
       router.refresh();
     });
-  }, [domain.id, router, startTransition]);
+  }, [demoUser, domain.id, router, startTransition]);
 
   const handleSaveEdits = useCallback(() => {
     startSaveTransition(async () => {
       const promises: Promise<void>[] = [];
       if (editName.trim() && editName.trim() !== domain.name) {
-        promises.push(updateDomainName(domain.id, editName.trim()));
+        promises.push(updateDomainName(domain.id, editName.trim(), demoUser));
       }
       const fields: Record<string, string> = {};
       if (editIdentity !== (domain.identity ?? "")) fields.identity = editIdentity;
@@ -375,7 +356,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
       if (editReason !== (domain.primaryReason ?? "")) fields.primaryReason = editReason;
       if (editCost !== (domain.primaryCost ?? "")) fields.primaryCost = editCost;
       if (Object.keys(fields).length > 0) {
-        promises.push(updateDomainFields(domain.id, fields));
+        promises.push(updateDomainFields(domain.id, fields, demoUser));
       }
       await Promise.all(promises);
       setEditing(false);
@@ -387,14 +368,14 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
         router.refresh();
       }
     });
-  }, [editName, editIdentity, editVision, editReason, editCost, domain, router, startSaveTransition]);
+  }, [demoUser, domain, domainLink, editCost, editIdentity, editName, editReason, editVision, router, startSaveTransition]);
 
   const handleDelete = useCallback(() => {
     startDeleteTransition(async () => {
-      await deleteDomain(domain.id);
+      await deleteDomain(domain.id, demoUser);
       router.push(homeUrl);
     });
-  }, [domain.id, router, startDeleteTransition]);
+  }, [demoUser, domain.id, homeUrl, router, startDeleteTransition]);
 
   return (
     <>
@@ -448,7 +429,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
                 top: "50%", left: "50%",
                 backgroundColor: `rgba(${r},${g},${b},0.6)`,
                 ["--angle" as string]: `${(i * 30)}deg`,
-                ["--distance" as string]: `${80 + Math.random() * 60}px`,
+                ["--distance" as string]: `${particleDistances[i]}px`,
                 ["--delay" as string]: `${i * 0.04}s`,
                 boxShadow: `0 0 4px rgba(${r},${g},${b},0.4)`,
               }}

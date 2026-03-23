@@ -167,7 +167,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
   useEffect(() => { setStars(generateStars(220)); }, []);
 
   // Build domain URL (adds demoUser param when admin is editing demo)
-  const domainUrl = (slug: string, extra?: string) => {
+  const domainUrl = useCallback((slug: string, extra?: string) => {
     const base = `/domain/${slug}`;
     const params = new URLSearchParams();
     if (editingDemo && demoUserId) params.set("demoUser", demoUserId);
@@ -177,7 +177,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
     }
     const qs = params.toString();
     return qs ? `${base}?${qs}` : base;
-  };
+  }, [demoUserId, editingDemo]);
 
   // Create domain modal
   const [showCreate, setShowCreate] = useState(false);
@@ -442,7 +442,11 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
           if (hasDraggedRef.current) {
             const newR = radiiRef.current[dIdx];
             setRadii((prev) => prev.map((r, i) => (i === dIdx ? newR : r)));
-            updateOrbit(domains[dIdx].id, newR);
+            updateOrbit(
+              domains[dIdx].id,
+              newR,
+              editingDemo ? demoUserId : undefined,
+            );
           } else {
             router.push(isDemo ? "/login" : domainUrl(domains[dIdx].slug));
           }
@@ -455,7 +459,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
     },
-    [domains, router],
+    [demoUserId, domainUrl, domains, editingDemo, isDemo, router],
   );
 
   /* ── Keyboard navigation (1–9) ──────────────────────────── */
@@ -478,7 +482,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [navigable, router]);
+  }, [domainUrl, isDemo, navigable, router]);
 
   /* ── Render ──────────────────────────────────────────────── */
 
@@ -589,9 +593,9 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
             {isDemo && (
               <Link
                 href="/login"
-                className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-700 hover:text-zinc-400 active:text-zinc-400 transition-colors duration-500"
+                className="mr-8 md:mr-12 text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-700 hover:text-zinc-400 active:text-zinc-400 transition-colors duration-500"
               >
-                Sign in
+                Create an account / login
               </Link>
             )}
             <div className="hidden sm:flex flex-col items-end gap-1">
@@ -647,6 +651,11 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
               disabled={randomizing}
               style={{ top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "none", border: "none", padding: 0 }}
               onClick={async () => {
+                if (isDemo) {
+                  router.push("/login");
+                  return;
+                }
+
                 setRandomizing(true);
                 const newRadii = [...radiiRef.current];
                 const newAngles = [...anglesRef.current];
@@ -675,7 +684,10 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                 anglesRef.current = newAngles;
                 setRadii(newRadii);
 
-                await resetOrbits(updates);
+                await resetOrbits(
+                  updates,
+                  editingDemo ? demoUserId : undefined,
+                );
                 setRandomizing(false);
               }}
             >
@@ -752,10 +764,6 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
               const isDrifting = es === "DRIFTING";
               const isDraggingThis = dragging === i;
               const dot = planetSize(radii[i], es);
-              // Find this domain's keyboard number (1-indexed)
-              const navIdx = navigable.findIndex((n) => n.i === i);
-              const keyNum = navIdx >= 0 && navIdx < 9 ? navIdx + 1 : null;
-
               return (
                 <div
                   key={`arm-${d.id}`}
@@ -847,22 +855,6 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
             })}
           </div>
         </div>
-
-        {/* Design previews (temp) */}
-        {isDemo && (
-          <div className="flex items-center justify-center gap-3 pb-2">
-            <span className="text-[8px] font-mono tracking-[0.3em] uppercase text-zinc-800">Designs</span>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <Link
-                key={n}
-                href={`/signupdesign/${n}`}
-                className="w-6 h-6 rounded-full border border-zinc-800 text-zinc-700 hover:border-zinc-500 hover:text-zinc-400 transition-colors flex items-center justify-center text-[9px] font-mono"
-              >
-                {n}
-              </Link>
-            ))}
-          </div>
-        )}
 
         {/* Footer */}
         <div className="relative flex items-center justify-center pb-4 md:pb-5 px-5">

@@ -51,14 +51,14 @@ export default function HowItWorksPage() {
                 </p>
               </div>
               <div className="flex gap-6 items-start">
-                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-16">Reset</span>
+                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-16">Align</span>
                 <p className="text-zinc-400 leading-relaxed text-[15px]">
                   Click Align to enter the reset flow. For each active domain, write one commitment.
                   The single next thing you will do. Not a wish. Not a plan. An action.
                 </p>
               </div>
               <div className="flex gap-6 items-start">
-                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-16">Act</span>
+                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-16">Execute</span>
                 <p className="text-zinc-400 leading-relaxed text-[15px]">
                   Go do it. Come back when you&apos;re ready for the next one.
                 </p>
@@ -116,7 +116,7 @@ export default function HowItWorksPage() {
             <p className="text-zinc-400 leading-relaxed text-[15px]">
               No feeds. No notifications. No streaks. No gamification.
               Axis is not trying to make you addicted to self-improvement.
-              Open it, look, act, close it.
+              Open it, look at it, close it, act on it.
             </p>
           </section>
         </div>
@@ -131,6 +131,45 @@ export default function HowItWorksPage() {
           </Link>
         </div>
       </main>
+
+      <aside className="fixed top-28 right-8 hidden xl:block w-72 z-20">
+        <div className="relative overflow-hidden rounded-[28px] border border-zinc-900/80 bg-black/45 px-5 py-6 shadow-[0_30px_100px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+          <div
+            className="pointer-events-none absolute inset-0"
+            aria-hidden
+            style={{
+              background:
+                "radial-gradient(circle at top right, rgba(103,232,249,0.08) 0%, transparent 38%), radial-gradient(circle at bottom left, rgba(255,255,255,0.04) 0%, transparent 42%), linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0) 100%)",
+            }}
+          />
+          <div
+            className="pointer-events-none absolute inset-x-5 top-0 h-px"
+            aria-hidden
+            style={{
+              background:
+                "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.16) 50%, transparent 100%)",
+            }}
+          />
+          <div className="relative">
+            <div className="flex items-center gap-3">
+              <div className="h-1.5 w-1.5 rounded-full bg-zinc-500/70 shadow-[0_0_12px_rgba(255,255,255,0.18)]" />
+              <p className="text-[10px] font-mono tracking-[0.4em] uppercase text-zinc-600">
+                TL;DR
+              </p>
+            </div>
+          <p
+            className="mt-4 text-[15px] leading-7 text-zinc-300"
+            style={{
+              fontFamily: "\"Century Schoolbook\", Georgia, serif",
+            }}
+          >
+            I built this so I can lay out everything that needs my attention,
+            keep it organized, and stop important parts of life from slipping
+            away.
+          </p>
+          </div>
+        </div>
+      </aside>
     </div>
   );
 }

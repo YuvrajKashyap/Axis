@@ -228,7 +228,7 @@ export default async function Design6() {
         {/* Domain list below the system — for accessibility + usability */}
         <div className="mt-16 w-full max-w-sm">
           <div className="border-t border-zinc-900">
-            {domains.map((d, i) => {
+            {domains.map((d) => {
               const status = d.status as DomainStatus;
               const cfg = STATUS_PLANET[status];
 

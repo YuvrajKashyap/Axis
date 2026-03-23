@@ -26,7 +26,7 @@ export default async function GravityDesign() {
         </header>
 
         <div className="w-full flex flex-col items-center space-y-32">
-          {domains.map((d, i) => (
+          {domains.map((d) => (
             <Link
               key={d.id}
               href={`/domain/${d.slug}`}
@@ -45,7 +45,9 @@ export default async function GravityDesign() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-12 text-left w-full pt-12 opacity-0 group-hover:opacity-100 transition-opacity duration-1000">
                 <div className="space-y-4">
                   <p className="text-[10px] text-zinc-600 uppercase tracking-widest">The Reason</p>
-                  <p className="text-sm font-light leading-relaxed text-zinc-400 italic">"{d.primaryReason}"</p>
+                  <p className="text-sm font-light leading-relaxed text-zinc-400 italic">
+                    &ldquo;{d.primaryReason}&rdquo;
+                  </p>
                 </div>
                 <div className="space-y-4">
                   <p className="text-[10px] text-zinc-600 uppercase tracking-widest">The Identity</p>

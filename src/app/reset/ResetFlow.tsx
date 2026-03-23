@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { submitResetCommitments } from "./actions";
 
@@ -15,7 +14,6 @@ type Domain = {
 };
 
 export function ResetFlow({ domains }: { domains: Domain[] }) {
-  const router = useRouter();
   const [step, setStep] = useState(0);
   const [commitments, setCommitments] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();

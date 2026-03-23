@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "";
 
 const DRIFT_THRESHOLD_MS = 72 * 60 * 60 * 1000; // 72 hours
+const DEMO_PASSWORD_HASH =
+  "$2b$10$PUMSZkfC5bjw9oxLoFxgtO0gBVyAm.8RNbhBMesDW7qsHMQxZrMb6";
 
 export async function getDomains(userId: string) {
   const domains = await prisma.domain.findMany({
@@ -54,7 +56,7 @@ export async function getOrCreateDemoUserId(): Promise<string | null> {
       data: {
         email: DEMO_EMAIL,
         name: "Demo",
-        password: "nologin",
+        password: DEMO_PASSWORD_HASH,
       },
       select: { id: true },
     });
