@@ -141,6 +141,12 @@ function validOrbit(v: number | null): number | null {
   return v >= MIN_ORBIT && v <= MAX_ORBIT ? v : null;
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return target.closest("input, textarea, select, [contenteditable=''], [contenteditable='true']") !== null;
+}
+
 const SUN_CORE = 18;
 const MAX_PLANET = Math.round(SUN_CORE * 0.65); // ~12px — never rival the sun
 
@@ -488,6 +494,17 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (
+        showCreate ||
+        e.defaultPrevented ||
+        e.altKey ||
+        e.ctrlKey ||
+        e.metaKey ||
+        isEditableTarget(e.target)
+      ) {
+        return;
+      }
+
       const key = parseInt(e.key, 10);
       if (key >= 1 && key <= 9) {
         const target = navigable[key - 1];
@@ -498,7 +515,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [domainUrl, isDemo, navigable, router]);
+  }, [domainUrl, isDemo, navigable, router, showCreate]);
 
   /* ── Render ──────────────────────────────────────────────── */
 
