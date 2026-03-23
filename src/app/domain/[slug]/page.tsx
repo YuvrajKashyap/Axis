@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { isAdmin } from "@/lib/get-data";
 import { notFound, redirect } from "next/navigation";
 import { DomainView } from "./DomainView";
 
 type DomainPageProps = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ align?: string; idx?: string }>;
+  searchParams: Promise<{ align?: string; idx?: string; demoUser?: string }>;
 };
 
 export default async function DomainDetailPage({ params, searchParams }: DomainPageProps) {
@@ -13,10 +14,18 @@ export default async function DomainDetailPage({ params, searchParams }: DomainP
   if (!session?.user?.id) redirect("/login");
 
   const { slug } = await params;
-  const { align, idx } = await searchParams;
+  const { align, idx, demoUser } = await searchParams;
+
+  // If demoUser param is set, admin is editing the demo orrery
+  let targetUserId = session.user.id;
+  if (demoUser) {
+    const admin = await isAdmin(session.user.email);
+    if (!admin) redirect("/");
+    targetUserId = demoUser;
+  }
 
   const domain = await prisma.domain.findUnique({
-    where: { userId_slug: { userId: session.user.id, slug } },
+    where: { userId_slug: { userId: targetUserId, slug } },
     select: {
       id: true,
       name: true,
@@ -55,6 +64,7 @@ export default async function DomainDetailPage({ params, searchParams }: DomainP
       }))}
       alignChain={alignSlugs}
       alignIdx={alignIdx}
+      demoUser={demoUser}
     />
   );
 }

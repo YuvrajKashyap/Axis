@@ -30,9 +30,10 @@ export async function resetOrbits(
   revalidatePath("/");
 }
 
-export async function createDomain(name: string): Promise<{ success: boolean; error?: string }> {
-  const userId = await getUser();
-  if (!userId) return { success: false, error: "Not signed in." };
+export async function createDomain(name: string, overrideUserId?: string): Promise<{ success: boolean; error?: string }> {
+  const sessionUserId = await getUser();
+  if (!sessionUserId) return { success: false, error: "Not signed in." };
+  const userId = overrideUserId || sessionUserId;
 
   const trimmed = name.trim();
   if (!trimmed) return { success: false, error: "Name is required." };

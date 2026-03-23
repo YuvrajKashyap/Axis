@@ -1,4 +1,4 @@
-import { getDomains, getDemoDomainsFromAdmin } from "@/lib/get-data";
+import { getDomains, getDemoDomains, isAdmin, getOrCreateDemoUserId } from "@/lib/get-data";
 import { auth } from "@/lib/auth";
 import { Orrery } from "./Orrery";
 import type { DomainData } from "./Orrery";
@@ -19,18 +19,35 @@ function toOrreryData(domains: Awaited<ReturnType<typeof getDomains>>): DomainDa
   }));
 }
 
-export default async function HomePage() {
-  const session = await auth();
+type HomePageProps = {
+  searchParams: Promise<{ demo?: string }>;
+};
 
+export default async function HomePage({ searchParams }: HomePageProps) {
+  const session = await auth();
+  const { demo } = await searchParams;
+
+  // Not logged in: show demo orrery (from DB), fall back to hardcoded
   if (!session?.user?.id) {
-    // Not logged in: show admin's orrery as demo, fall back to hardcoded
-    const adminDomains = await getDemoDomainsFromAdmin();
-    if (adminDomains && adminDomains.length > 0) {
-      return <Orrery domains={toOrreryData(adminDomains)} isDemo />;
+    const demoDomains = await getDemoDomains();
+    if (demoDomains && demoDomains.length > 0) {
+      return <Orrery domains={toOrreryData(demoDomains)} isDemo />;
     }
     return <Orrery domains={DEMO_DOMAINS} isDemo />;
   }
 
+  const admin = await isAdmin(session.user.email);
+
+  // Admin editing demo mode: load demo user's domains, fully editable
+  if (admin && demo === "edit") {
+    const demoUserId = await getOrCreateDemoUserId();
+    if (demoUserId) {
+      const demoDomains = await getDomains(demoUserId);
+      return <Orrery domains={toOrreryData(demoDomains)} isAdmin editingDemo demoUserId={demoUserId} />;
+    }
+  }
+
+  // Normal logged-in user: show their own orrery
   const domains = await getDomains(session.user.id);
-  return <Orrery domains={toOrreryData(domains)} />;
+  return <Orrery domains={toOrreryData(domains)} isAdmin={admin} />;
 }

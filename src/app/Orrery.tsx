@@ -153,10 +153,31 @@ function planetSize(normalizedRadius: number, status: EffectiveStatus): number {
 
 /* ── Component ────────────────────────────────────────────────── */
 
-export function Orrery({ domains, isDemo = false }: { domains: DomainData[]; isDemo?: boolean }) {
+type OrreryProps = {
+  domains: DomainData[];
+  isDemo?: boolean;
+  isAdmin?: boolean;
+  editingDemo?: boolean;
+  demoUserId?: string;
+};
+
+export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo = false, demoUserId }: OrreryProps) {
   const router = useRouter();
   const [stars, setStars] = useState<Star[]>([]);
   useEffect(() => { setStars(generateStars(220)); }, []);
+
+  // Build domain URL (adds demoUser param when admin is editing demo)
+  const domainUrl = (slug: string, extra?: string) => {
+    const base = `/domain/${slug}`;
+    const params = new URLSearchParams();
+    if (editingDemo && demoUserId) params.set("demoUser", demoUserId);
+    if (extra) {
+      const extraParams = new URLSearchParams(extra);
+      extraParams.forEach((v, k) => params.set(k, v));
+    }
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+  };
 
   // Create domain modal
   const [showCreate, setShowCreate] = useState(false);
@@ -361,7 +382,7 @@ export function Orrery({ domains, isDemo = false }: { domains: DomainData[]; isD
       // Drifting and archived planets can't be dragged — just navigate
       const es = effectiveStatus(domains[idx].status);
       if (es === "DRIFTING" || es === "ARCHIVED") {
-        router.push(`/domain/${domains[idx].slug}`);
+        router.push(domainUrl(domains[idx].slug));
         return;
       }
 
@@ -423,7 +444,7 @@ export function Orrery({ domains, isDemo = false }: { domains: DomainData[]; isD
             setRadii((prev) => prev.map((r, i) => (i === dIdx ? newR : r)));
             updateOrbit(domains[dIdx].id, newR);
           } else {
-            router.push(isDemo ? "/login" : `/domain/${domains[dIdx].slug}`);
+            router.push(isDemo ? "/login" : domainUrl(domains[dIdx].slug));
           }
         }
         hasDraggedRef.current = false;
@@ -451,7 +472,7 @@ export function Orrery({ domains, isDemo = false }: { domains: DomainData[]; isD
       if (key >= 1 && key <= 9) {
         const target = navigable[key - 1];
         if (target) {
-          router.push(isDemo ? "/login" : `/domain/${target.d.slug}`);
+          router.push(isDemo ? "/login" : domainUrl(target.d.slug));
         }
       }
     };
@@ -539,6 +560,14 @@ export function Orrery({ domains, isDemo = false }: { domains: DomainData[]; isD
           <div className="flex items-center gap-4 md:gap-6">
             {!isDemo && (
               <>
+                {isAdmin && (
+                  <Link
+                    href={editingDemo ? "/" : "/?demo=edit"}
+                    className="text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-800 hover:text-zinc-500 active:text-zinc-500 transition-colors duration-500"
+                  >
+                    {editingDemo ? "My orrery" : "Edit demo"}
+                  </Link>
+                )}
                 <button
                   onClick={async () => { await logout(); router.push("/"); router.refresh(); }}
                   className="text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-800 hover:text-zinc-500 active:text-zinc-500 transition-colors duration-500"
@@ -850,7 +879,7 @@ export function Orrery({ domains, isDemo = false }: { domains: DomainData[]; isD
             const slugs = alignable.map((d) => d.slug).join(",");
             return (
               <Link
-                href={isDemo ? "/login" : `/domain/${alignable[0].slug}?align=${encodeURIComponent(slugs)}&idx=0`}
+                href={isDemo ? "/login" : domainUrl(alignable[0].slug, `align=${encodeURIComponent(slugs)}&idx=0`)}
                 className="absolute right-5 md:right-12 group text-[10px] font-mono tracking-[0.4em] uppercase"
               >
                 <span className="text-zinc-600 group-hover:text-zinc-400 group-active:text-zinc-400 transition-colors duration-500">Align </span>
@@ -896,7 +925,7 @@ export function Orrery({ domains, isDemo = false }: { domains: DomainData[]; isD
               onKeyDown={(e) => {
                 if (e.key === "Enter" && newDomainName.trim()) {
                   startCreateTransition(async () => {
-                    const result = await createDomain(newDomainName);
+                    const result = await createDomain(newDomainName, editingDemo ? demoUserId : undefined);
                     if (result.success) {
                       setShowCreate(false);
                       router.refresh();
@@ -924,7 +953,7 @@ export function Orrery({ domains, isDemo = false }: { domains: DomainData[]; isD
                 onClick={() => {
                   if (!newDomainName.trim()) return;
                   startCreateTransition(async () => {
-                    const result = await createDomain(newDomainName);
+                    const result = await createDomain(newDomainName, editingDemo ? demoUserId : undefined);
                     if (result.success) {
                       setShowCreate(false);
                       router.refresh();

@@ -41,14 +41,34 @@ export async function getDomains(userId: string) {
   });
 }
 
-export async function getDemoDomainsFromAdmin() {
-  if (!ADMIN_EMAIL) return null;
+const DEMO_EMAIL = "demo@axis.internal";
 
-  const admin = await prisma.user.findUnique({
-    where: { email: ADMIN_EMAIL },
+export async function getOrCreateDemoUserId(): Promise<string | null> {
+  let demo = await prisma.user.findUnique({
+    where: { email: DEMO_EMAIL },
     select: { id: true },
   });
 
-  if (!admin) return null;
-  return getDomains(admin.id);
+  if (!demo) {
+    demo = await prisma.user.create({
+      data: {
+        email: DEMO_EMAIL,
+        name: "Demo",
+        password: "nologin",
+      },
+      select: { id: true },
+    });
+  }
+
+  return demo.id;
+}
+
+export async function getDemoDomains() {
+  const demoUserId = await getOrCreateDemoUserId();
+  if (!demoUserId) return null;
+  return getDomains(demoUserId);
+}
+
+export async function isAdmin(email: string | null | undefined): Promise<boolean> {
+  return !!email && !!ADMIN_EMAIL && email === ADMIN_EMAIL;
 }

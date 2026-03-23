@@ -221,9 +221,10 @@ type DomainViewProps = {
   commitments: Commitment[];
   alignChain?: string[] | null;
   alignIdx?: number;
+  demoUser?: string;
 };
 
-export function DomainView({ domain, commitments, alignChain, alignIdx = 0 }: DomainViewProps) {
+export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demoUser }: DomainViewProps) {
   const [currentColor, setCurrentColor] = useState(domain.color ?? "#67e8f9");
   const color = currentColor;
   const { r, g, b } = hexToRgb(color);
@@ -234,6 +235,16 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0 }: Do
   const [clearing, setClearing] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(domain.status);
   const router = useRouter();
+
+  // Navigation helpers for demo-edit mode
+  const homeUrl = demoUser ? "/?demo=edit" : "/";
+  const domainLink = (slug: string, extra?: string) => {
+    const params = new URLSearchParams();
+    if (demoUser) params.set("demoUser", demoUser);
+    if (extra) new URLSearchParams(extra).forEach((v, k) => params.set(k, v));
+    const qs = params.toString();
+    return qs ? `/domain/${slug}?${qs}` : `/domain/${slug}`;
+  };
 
   // Editing state
   const [editing, setEditing] = useState(false);
@@ -293,7 +304,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0 }: Do
           setEditReason(domain.primaryReason ?? "");
           setEditCost(domain.primaryCost ?? "");
         } else {
-          router.push("/");
+          router.push(homeUrl);
         }
       }
     };
@@ -307,10 +318,10 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0 }: Do
       const nextIdx = alignIdx + 1;
       const nextSlug = alignChain[nextIdx];
       const slugs = alignChain.join(",");
-      router.push(`/domain/${nextSlug}?align=${encodeURIComponent(slugs)}&idx=${nextIdx}`);
+      router.push(domainLink(nextSlug, `align=${encodeURIComponent(slugs)}&idx=${nextIdx}`));
     } else {
       // Last in chain or standalone — go home
-      router.push("/");
+      router.push(homeUrl);
     }
   }, [isAligning, isLastInChain, alignChain, alignIdx, router]);
 
@@ -371,7 +382,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0 }: Do
       // If name changed, slug changed — need to redirect
       if (editName.trim() && editName.trim() !== domain.name) {
         const newSlug = editName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-        router.push(`/domain/${newSlug}`);
+        router.push(domainLink(newSlug));
       } else {
         router.refresh();
       }
@@ -381,7 +392,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0 }: Do
   const handleDelete = useCallback(() => {
     startDeleteTransition(async () => {
       await deleteDomain(domain.id);
-      router.push("/");
+      router.push(homeUrl);
     });
   }, [domain.id, router, startDeleteTransition]);
 
@@ -525,7 +536,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0 }: Do
         {/* Fixed nav */}
         <div className="fixed top-0 left-0 right-0 z-30 px-5 md:px-12 py-4 md:py-6 flex items-center justify-between">
           <Link
-            href="/"
+            href={homeUrl}
             className="text-[10px] md:text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-700 hover:text-zinc-400 active:text-zinc-400 transition-colors py-2"
           >
             ← Axis
