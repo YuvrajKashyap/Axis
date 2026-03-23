@@ -873,33 +873,35 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
         </div>
 
         {/* Footer */}
-        <div className="relative flex items-center justify-center pb-4 md:pb-5 px-5">
-          <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-800 hidden md:block">
+        <div className="px-5 pb-4 md:px-8 md:pb-5 lg:px-12">
+          <div className="flex flex-col items-center justify-center gap-3 lg:relative lg:min-h-[20px] lg:gap-0">
+            <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-800 text-center hidden lg:block">
             Drag planets to adjust orbit · Click to enter · 1–9 to navigate
-          </p>
-          <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-800 md:hidden">
-            Tap to enter · Drag to adjust
-          </p>
+            </p>
+            <p className="text-[10px] font-mono tracking-[0.25em] uppercase text-zinc-800 text-center lg:hidden">
+              Tap planets to enter · Drag to adjust orbit
+            </p>
 
-          {(() => {
-            const alignable: DomainData[] = domains.filter(
-              (domain: DomainData) =>
-                effectiveStatus(domain.status) !== "ARCHIVED",
-            );
-            if (alignable.length === 0) return null;
-            const slugs = alignable
-              .map((domain: DomainData) => domain.slug)
-              .join(",");
-            return (
-              <Link
-                href={isDemo ? "/login" : domainUrl(alignable[0].slug, `align=${encodeURIComponent(slugs)}&idx=0`)}
-                className="absolute right-5 md:right-12 group text-[10px] font-mono tracking-[0.4em] uppercase"
-              >
-                <span className="text-zinc-600 group-hover:text-zinc-400 group-active:text-zinc-400 transition-colors duration-500">Align </span>
-                <span className="text-zinc-700 group-hover:text-cyan-400 group-active:text-cyan-400 transition-colors duration-500 align-arrow">→</span>
-              </Link>
-            );
-          })()}
+            {(() => {
+              const alignable: DomainData[] = domains.filter(
+                (domain: DomainData) =>
+                  effectiveStatus(domain.status) !== "ARCHIVED",
+              );
+              if (alignable.length === 0) return null;
+              const slugs = alignable
+                .map((domain: DomainData) => domain.slug)
+                .join(",");
+              return (
+                <Link
+                  href={isDemo ? "/login" : domainUrl(alignable[0].slug, `align=${encodeURIComponent(slugs)}&idx=0`)}
+                  className="group text-[10px] font-mono tracking-[0.35em] uppercase lg:absolute lg:right-0"
+                >
+                  <span className="text-zinc-600 group-hover:text-zinc-400 group-active:text-zinc-400 transition-colors duration-500">Align </span>
+                  <span className="text-zinc-700 group-hover:text-cyan-400 group-active:text-cyan-400 transition-colors duration-500 align-arrow">→</span>
+                </Link>
+              );
+            })()}
+          </div>
         </div>
       </div>
 

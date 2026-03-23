@@ -20,11 +20,16 @@
 .domain-snap-container {
   scroll-snap-type: y mandatory;
   overflow-y: auto;
+  overflow-x: hidden;
   height: 100vh;
+  width: 100%;
+  position: relative;
 }
 
 .domain-snap-section {
   scroll-snap-align: start;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 @keyframes domain-overlay-fade {
