@@ -1,5 +1,14 @@
 # Axis
 
+## Live
+
+https://axis.yuvrajkashyap.com
+
+Axis is fully deployed and running in production.
+Create an account and use it live.
+
+
+
 A personal alignment system built around life domains, commitments, and execution.
 
 Axis is not a task manager, habit tracker, or productivity feed. It is designed to help a user quickly regain clarity across the areas of life that matter most, commit to a concrete next action, and leave the app to execute.
