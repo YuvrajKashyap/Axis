@@ -555,7 +555,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
       <div className="relative z-10 min-h-screen flex flex-col">
 
         {/* Header */}
-        <header className="flex items-center justify-between px-5 md:px-12 py-4 md:py-6">
+        <header className="relative z-30 flex items-center justify-between px-5 md:px-12 py-4 md:py-6">
           <h1 className="text-[11px] font-mono tracking-[0.5em] uppercase flex items-center gap-3 md:gap-4">
             <span className="text-zinc-500">Axis</span>
             <span className="text-zinc-800 hidden sm:inline">|</span>
@@ -616,7 +616,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
         <div className="flex-1 flex items-center justify-center px-2 md:px-4 py-2 md:py-4">
           <div
             ref={containerRef}
-            className="relative"
+            className="relative z-0"
             style={{
               width: "min(680px, 88vw, calc(100vh - 240px))",
               aspectRatio: "1",
@@ -642,6 +642,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                     height: `${radii[i] * 100}%`,
                     top: `${50 - radii[i] * 50}%`,
                     left: `${50 - radii[i] * 50}%`,
+                    pointerEvents: "none",
                     transition: dragging === i ? "none" : "border-color 0.3s",
                   }}
                 />
