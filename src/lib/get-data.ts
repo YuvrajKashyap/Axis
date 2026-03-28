@@ -6,7 +6,12 @@ const DRIFT_THRESHOLD_MS = 72 * 60 * 60 * 1000; // 72 hours
 const DEMO_PASSWORD_HASH =
   "$2b$10$PUMSZkfC5bjw9oxLoFxgtO0gBVyAm.8RNbhBMesDW7qsHMQxZrMb6";
 
-export async function getDomains(userId: string) {
+type GetDomainsOptions = {
+  disableAutoDrift?: boolean;
+};
+
+export async function getDomains(userId: string, options: GetDomainsOptions = {}) {
+  const { disableAutoDrift = false } = options;
   const domains = await prisma.domain.findMany({
     where: { userId },
     orderBy: { createdAt: "asc" },
@@ -28,6 +33,7 @@ export async function getDomains(userId: string) {
     // ARCHIVED takes precedence — never auto-drift archived domains
     // Only auto-drift if user's explicit status is active (ALIGNED/NEUTRAL)
     const autoDrifted =
+      !disableAutoDrift &&
       domain.status !== "DRIFTING" &&
       domain.status !== "ARCHIVED" &&
       isStale;
@@ -72,7 +78,7 @@ export async function getOrCreateDemoUserId(): Promise<string | null> {
 export async function getDemoDomains() {
   const demoUserId = await getOrCreateDemoUserId();
   if (!demoUserId) return null;
-  return getDomains(demoUserId);
+  return getDomains(demoUserId, { disableAutoDrift: true });
 }
 
 export async function isAdmin(email: string | null | undefined): Promise<boolean> {

@@ -49,7 +49,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   if (admin && demo === "edit") {
     const demoUserId = await getOrCreateDemoUserId();
     if (demoUserId) {
-      const demoDomains = await getDomains(demoUserId);
+      const demoDomains = await getDomains(demoUserId, { disableAutoDrift: true });
       return <Orrery domains={toOrreryData(demoDomains)} isAdmin editingDemo demoUserId={demoUserId} />;
     }
   }
