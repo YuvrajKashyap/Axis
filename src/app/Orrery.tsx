@@ -29,6 +29,7 @@ export type DomainData = {
 };
 
 type EffectiveStatus = "ACTIVE" | "DRIFTING" | "ARCHIVED";
+type HoverMetric = EffectiveStatus | "TOTAL";
 
 function effectiveStatus(db: string): EffectiveStatus {
   if (db === "ARCHIVED") return "ARCHIVED";
@@ -103,6 +104,12 @@ function getDomainCfg(d: DomainData) {
     DEFAULT_ACTIVE_COLOR
   );
   return buildGlow(color, es);
+}
+
+function matchesHoverMetric(metric: HoverMetric | null, status: EffectiveStatus): boolean {
+  if (!metric) return false;
+  if (metric === "TOTAL") return true;
+  return metric === status;
 }
 
 /* ── Starfield ────────────────────────────────────────────────── */
@@ -195,6 +202,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
   const [newDomainName, setNewDomainName] = useState("");
   const [createError, setCreateError] = useState("");
   const [isCreating, startCreateTransition] = useTransition();
+  const [hoveredMetric, setHoveredMetric] = useState<HoverMetric | null>(null);
   const showCreateRef = useRef(showCreate);
   showCreateRef.current = showCreate;
 
@@ -458,6 +466,32 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
     .sort(
       (a: IndexedDomain, b: IndexedDomain) => radii[a.index] - radii[b.index],
     );
+  const orbitingCount = domains.filter(
+    (domain: DomainData) => effectiveStatus(domain.status) === "ACTIVE",
+  ).length;
+  const driftingCount = domains.filter(
+    (domain: DomainData) => effectiveStatus(domain.status) === "DRIFTING",
+  ).length;
+  const archivedCount = domains.filter(
+    (domain: DomainData) => effectiveStatus(domain.status) === "ARCHIVED",
+  ).length;
+  const totalCount = domains.length;
+  const alignable: DomainData[] = domains.filter(
+    (domain: DomainData) => effectiveStatus(domain.status) !== "ARCHIVED",
+  );
+  const alignSlugs = alignable
+    .map((domain: DomainData) => domain.slug)
+    .join(",");
+  const footerStats: { key: HoverMetric; count: number; label: string }[] = [
+    { key: "ACTIVE", count: orbitingCount, label: "planets in orbit" },
+    { key: "DRIFTING", count: driftingCount, label: "planets drifting" },
+    { key: "ARCHIVED", count: archivedCount, label: "planets archived" },
+    { key: "TOTAL", count: totalCount, label: "planets total" },
+  ];
+  const countSlotWidthCh = Math.max(
+    2,
+    ...footerStats.map((stat) => String(stat.count).length),
+  ) + 1;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -767,6 +801,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
               const isArchived = es === "ARCHIVED";
               const isDrifting = es === "DRIFTING";
               const isDraggingThis = dragging === i;
+              const isHoverMatch = matchesHoverMetric(hoveredMetric, es);
               const dot = planetSize(radii[i], es);
               return (
                 <div
@@ -822,25 +857,28 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                           className={`absolute rounded-full ${isDrifting ? "drift-glow" : isArchived ? "archive-drift" : ""}`}
                           style={{
                             width: dot * (isArchived ? 2.5 : isDrifting ? 5 : 3.5),
-                            height: dot * (isArchived ? 2.5 : isDrifting ? 5 : 3.5),
-                            background: `radial-gradient(circle, ${cfg.color}${isArchived ? "10" : isDrifting ? "20" : "15"} 0%, transparent 70%)`,
-                            transition: "transform 0.3s",
-                            transform: isDraggingThis ? "scale(1.8)" : "scale(1)",
-                          }}
-                        />
+                          height: dot * (isArchived ? 2.5 : isDrifting ? 5 : 3.5),
+                          background: `radial-gradient(circle, ${cfg.color}${isArchived ? "10" : isDrifting ? "20" : "15"} 0%, transparent 70%)`,
+                          opacity: isHoverMatch ? (isArchived ? 0.8 : 0.95) : undefined,
+                          filter: isHoverMatch ? "brightness(1.14) saturate(1.08)" : "none",
+                          transition: "transform 0.25s ease, opacity 0.25s ease, filter 0.25s ease",
+                          transform: isDraggingThis ? "scale(1.8)" : isHoverMatch ? "scale(1.14)" : "scale(1)",
+                        }}
+                      />
                         {/* Dot */}
                         <div
                           className={isArchived ? "asteroid-shape relative" : "rounded-full relative"}
                           style={{
-                            width: dot,
-                            height: dot,
-                            backgroundColor: cfg.color,
-                            boxShadow: cfg.glow,
-                            opacity: isArchived ? 0.4 : 1,
-                            transition: "transform 0.2s",
-                            transform: isDraggingThis ? "scale(1.4)" : "scale(1)",
-                          }}
-                        />
+                          width: dot,
+                          height: dot,
+                          backgroundColor: cfg.color,
+                          boxShadow: isHoverMatch ? `${cfg.glow}, ${cfg.glowSoft}, 0 0 18px ${cfg.color}33` : cfg.glow,
+                          opacity: isArchived ? 0.4 : 1,
+                          filter: isHoverMatch ? "brightness(1.18) saturate(1.08)" : "none",
+                          transition: "transform 0.2s ease, box-shadow 0.25s ease, filter 0.25s ease",
+                          transform: isDraggingThis ? "scale(1.4)" : isHoverMatch ? "scale(1.08)" : "scale(1)",
+                        }}
+                      />
                       </div>
 
                       {/* Label */}
@@ -851,8 +889,12 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                         <p
                           className="text-[10px] font-mono tracking-[0.2em] uppercase text-center transition-colors"
                           style={{
-                            color: isArchived ? "rgba(113,113,122,0.4)" : isDrifting ? "#f87171" : isDraggingThis ? cfg.color : "rgba(161,161,170,0.7)",
-                            textShadow: isDrifting ? "0 0 8px rgba(248,113,113,0.4)" : "none",
+                            color: isArchived
+                              ? (isHoverMatch ? "rgba(228,228,231,0.88)" : "rgba(113,113,122,0.4)")
+                              : isDrifting
+                                ? (isHoverMatch ? "#fca5a5" : "#f87171")
+                                : (isDraggingThis || isHoverMatch ? cfg.color : "rgba(161,161,170,0.7)"),
+                            textShadow: isHoverMatch ? `0 0 14px ${cfg.color}2e` : isDrifting ? "0 0 8px rgba(248,113,113,0.4)" : "none",
                           }}
                         >
                           {domain.name}
@@ -862,7 +904,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                             className="text-[8px] font-mono tracking-widest uppercase text-center mt-0.5 transition-opacity"
                             style={{
                               color: isDrifting ? "rgba(248,113,113,0.5)" : cfg.color,
-                              opacity: isArchived ? 0.25 : 0.7,
+                              opacity: isHoverMatch ? 0.9 : isArchived ? 0.25 : 0.7,
                             }}
                           >
                             {cfg.label}
@@ -879,7 +921,39 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
 
         {/* Footer */}
         <div className="px-5 pb-4 md:px-8 md:pb-5 lg:px-12">
-          <div className="flex flex-col items-center justify-center gap-3 lg:relative lg:min-h-[20px] lg:gap-0">
+          <div className="flex flex-col items-center justify-center gap-4 lg:relative lg:min-h-[72px] lg:gap-0">
+            <div className="flex w-full flex-col items-start gap-1 text-left lg:absolute lg:bottom-0 lg:left-0 lg:w-auto">
+              {footerStats.map((stat) => {
+                const isHovered = hoveredMetric === stat.key;
+                return (
+                  <p
+                    key={stat.key}
+                    onPointerEnter={() => setHoveredMetric(stat.key)}
+                    onPointerLeave={() => setHoveredMetric(null)}
+                    className="flex items-baseline font-mono text-[9px] uppercase tracking-[0.35em] text-zinc-700 transition-all duration-300"
+                    style={{
+                      cursor: "default",
+                      color: isHovered ? "rgba(228,228,231,0.92)" : undefined,
+                      textShadow: isHovered ? "0 0 18px rgba(255,255,255,0.10)" : "none",
+                      transform: isHovered ? "translateX(2px)" : "translateX(0)",
+                    }}
+                  >
+                    <span
+                      className="tabular-nums text-zinc-300"
+                      style={{
+                        width: `${countSlotWidthCh}ch`,
+                        textAlign: "right",
+                        flex: "0 0 auto",
+                      }}
+                    >
+                      {stat.count}
+                    </span>
+                    <span className="pl-[0.9em]">{stat.label}</span>
+                  </p>
+                );
+              })}
+            </div>
+
             <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-800 text-center hidden lg:block">
             Drag planets to adjust orbit · Click to enter · 1–9 to navigate
             </p>
@@ -887,25 +961,15 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
               Tap planets to enter · Drag to adjust orbit
             </p>
 
-            {(() => {
-              const alignable: DomainData[] = domains.filter(
-                (domain: DomainData) =>
-                  effectiveStatus(domain.status) !== "ARCHIVED",
-              );
-              if (alignable.length === 0) return null;
-              const slugs = alignable
-                .map((domain: DomainData) => domain.slug)
-                .join(",");
-              return (
+            {alignable.length > 0 && (
                 <Link
-                  href={isDemo ? "/login" : domainUrl(alignable[0].slug, `align=${encodeURIComponent(slugs)}&idx=0`)}
+                  href={isDemo ? "/login" : domainUrl(alignable[0].slug, `align=${encodeURIComponent(alignSlugs)}&idx=0`)}
                   className="group text-[10px] font-mono tracking-[0.35em] uppercase lg:absolute lg:right-0"
                 >
                   <span className="text-zinc-600 group-hover:text-zinc-400 group-active:text-zinc-400 transition-colors duration-500">Align </span>
                   <span className="text-zinc-700 group-hover:text-cyan-400 group-active:text-cyan-400 transition-colors duration-500 align-arrow">→</span>
                 </Link>
-              );
-            })()}
+            )}
           </div>
         </div>
       </div>
