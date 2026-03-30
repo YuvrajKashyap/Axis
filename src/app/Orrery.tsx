@@ -922,7 +922,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
         {/* Footer */}
         <div className="px-5 pb-4 md:px-8 md:pb-5 lg:px-12">
           <div className="flex flex-col items-center justify-center gap-4 lg:relative lg:min-h-[72px] lg:gap-0">
-            <div className="flex w-full flex-col items-start gap-1 text-left lg:absolute lg:bottom-0 lg:left-0 lg:w-auto">
+            <div className="flex w-full flex-col items-start gap-1.5 text-left lg:absolute lg:bottom-0 lg:left-0 lg:w-auto">
               {footerStats.map((stat) => {
                 const isHovered = hoveredMetric === stat.key;
                 return (
@@ -930,7 +930,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                     key={stat.key}
                     onPointerEnter={() => setHoveredMetric(stat.key)}
                     onPointerLeave={() => setHoveredMetric(null)}
-                    className="flex items-baseline font-mono text-[9px] uppercase tracking-[0.35em] text-zinc-700 transition-all duration-300"
+                    className="flex items-baseline font-mono text-[9px] uppercase tracking-[0.35em] leading-none text-zinc-700 transition-all duration-300"
                     style={{
                       cursor: "default",
                       color: isHovered ? "rgba(228,228,231,0.92)" : undefined,
@@ -954,17 +954,17 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
               })}
             </div>
 
-            <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-800 text-center hidden lg:block">
+            <p className="text-[10px] font-mono tracking-[0.3em] uppercase leading-none text-zinc-800 text-center hidden lg:absolute lg:bottom-0 lg:left-1/2 lg:block lg:-translate-x-1/2">
             Drag planets to adjust orbit · Click to enter · 1–9 to navigate
             </p>
-            <p className="text-[10px] font-mono tracking-[0.25em] uppercase text-zinc-800 text-center lg:hidden">
+            <p className="text-[10px] font-mono tracking-[0.25em] uppercase leading-none text-zinc-800 text-center lg:hidden">
               Tap planets to enter · Drag to adjust orbit
             </p>
 
             {alignable.length > 0 && (
                 <Link
                   href={isDemo ? "/login" : domainUrl(alignable[0].slug, `align=${encodeURIComponent(alignSlugs)}&idx=0`)}
-                  className="group text-[10px] font-mono tracking-[0.35em] uppercase lg:absolute lg:right-0"
+                  className="group text-[10px] font-mono tracking-[0.35em] uppercase leading-none lg:absolute lg:right-0 lg:bottom-0"
                 >
                   <span className="text-zinc-600 group-hover:text-zinc-400 group-active:text-zinc-400 transition-colors duration-500">Align </span>
                   <span className="text-zinc-700 group-hover:text-cyan-400 group-active:text-cyan-400 transition-colors duration-500 align-arrow">→</span>
