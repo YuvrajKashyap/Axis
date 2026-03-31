@@ -728,9 +728,9 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
                 className="w-full text-xl md:text-2xl font-light leading-10 text-zinc-200 bg-transparent outline-none border-b border-zinc-800 focus:border-zinc-600 transition-colors placeholder:text-zinc-800 resize-none text-center"
               />
             ) : (
-              <p className="text-xl md:text-2xl font-light leading-10 text-zinc-200">
-                {domain.vision || "No vision defined yet."}
-              </p>
+                <p className="whitespace-pre-wrap text-xl md:text-2xl font-light leading-10 text-zinc-200">
+                  {domain.vision || "No vision defined yet."}
+                </p>
             )}
           </div>
         </section>
@@ -754,7 +754,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
                   className="w-full text-base leading-8 text-zinc-300 font-light bg-transparent outline-none border-b border-zinc-800 focus:border-zinc-600 transition-colors placeholder:text-zinc-800 resize-none text-center md:text-right"
                 />
               ) : (
-                <p className="text-base leading-8 text-zinc-300 font-light">
+                <p className="whitespace-pre-wrap text-base leading-8 text-zinc-300 font-light">
                   {domain.primaryReason || "No reason defined yet."}
                 </p>
               )}
@@ -785,7 +785,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
                   className="w-full text-base leading-8 text-zinc-300 font-light bg-transparent outline-none border-b border-zinc-800 focus:border-zinc-600 transition-colors placeholder:text-zinc-800 resize-none text-center md:text-left"
                 />
               ) : (
-                <p className="text-base leading-8 text-zinc-300 font-light">
+                <p className="whitespace-pre-wrap text-base leading-8 text-zinc-300 font-light">
                   {domain.primaryCost || domain.currentReality || "No cost defined yet."}
                 </p>
               )}
