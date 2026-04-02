@@ -44,12 +44,19 @@
 /* ── Color picker ── */
 
 @keyframes color-picker-enter {
-  from { opacity: 0; transform: translateX(-50%) translateY(-4px) scale(0.96); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  from { opacity: 0; transform: var(--color-picker-enter-from, translateY(-4px) scale(0.96)); }
+  to   { opacity: 1; transform: var(--color-picker-enter-to, translateY(0) scale(1)); }
 }
 
 .color-picker-panel {
   animation: color-picker-enter 0.2s ease-out forwards;
+}
+
+@media (min-width: 640px) {
+  .color-picker-panel {
+    --color-picker-enter-from: translateX(-50%) translateY(-4px) scale(0.96);
+    --color-picker-enter-to: translateX(-50%) translateY(0) scale(1);
+  }
 }
 
 /* ── Quote overlay animations ── */
