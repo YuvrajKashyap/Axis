@@ -138,8 +138,9 @@ function ColorPicker({ color, onChange }: { color: string; onChange: (c: string)
 
       {open && (
         <div
-          className="absolute top-8 left-1/2 -translate-x-1/2 z-50 p-3 rounded-lg color-picker-panel touch-none"
+          className="absolute top-8 left-0 z-50 p-3 rounded-lg color-picker-panel touch-none sm:left-1/2 sm:-translate-x-1/2"
           style={{
+            width: "min(12.5rem, calc(100vw - 1.5rem))",
             backgroundColor: "rgba(12,12,14,0.95)",
             border: "1px solid rgba(255,255,255,0.06)",
             backdropFilter: "blur(20px)",
@@ -149,7 +150,7 @@ function ColorPicker({ color, onChange }: { color: string; onChange: (c: string)
           {/* SV area */}
           <div
             ref={svRef}
-            className="w-44 h-32 rounded relative cursor-crosshair"
+            className="h-32 w-full rounded relative cursor-crosshair"
             style={{
               background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ${pureHue})`,
             }}
@@ -169,7 +170,7 @@ function ColorPicker({ color, onChange }: { color: string; onChange: (c: string)
           {/* Hue bar */}
           <div
             ref={hueRef}
-            className="w-44 h-3 rounded-full mt-3 relative cursor-pointer"
+            className="h-3 w-full rounded-full mt-3 relative cursor-pointer"
             style={{
               background: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
             }}
