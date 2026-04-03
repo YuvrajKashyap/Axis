@@ -23,6 +23,7 @@ function toOrreryData(domains: DomainList): DomainData[] {
     positionX: domain.positionX,
     color: domain.color ?? null,
     autoDrifted: domain.autoDrifted,
+    lastCommitmentAt: domain.lastCommitmentAt?.toISOString() ?? null,
   }));
 }
 
