@@ -26,6 +26,7 @@ export type DomainData = {
   positionX: number | null;
   color: string | null;
   autoDrifted: boolean;
+  lastCommitmentAt?: string | null;
 };
 
 type EffectiveStatus = "ACTIVE" | "DRIFTING" | "ARCHIVED";
@@ -63,6 +64,7 @@ const ARCHIVE_BASE_RADIUS = 1.25;
 const DEFAULT_ACTIVE_COLOR = "#67e8f9";
 const DEFAULT_DRIFTING_COLOR = "#f87171";
 const DEFAULT_ARCHIVED_COLOR = "#71717a";
+const DRIFT_THRESHOLD_MS = 72 * 60 * 60 * 1000;
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const h = hex.replace("#", "");
@@ -110,6 +112,22 @@ function matchesHoverMetric(metric: HoverMetric | null, status: EffectiveStatus)
   if (!metric) return false;
   if (metric === "TOTAL") return true;
   return metric === status;
+}
+
+function formatDriftCountdown(remainingMs: number | null): string {
+  if (remainingMs === null) return "--h --m --s";
+  const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
+}
+
+function driftCountdownTone(remainingMs: number | null): string {
+  if (remainingMs === null) return "rgba(161,161,170,0.75)";
+  if (remainingMs <= 6 * 60 * 60 * 1000) return "#fca5a5";
+  if (remainingMs <= 24 * 60 * 60 * 1000) return "#fcd34d";
+  return "rgba(228,228,231,0.88)";
 }
 
 /* ── Starfield ────────────────────────────────────────────────── */
@@ -203,8 +221,28 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
   const [createError, setCreateError] = useState("");
   const [isCreating, startCreateTransition] = useTransition();
   const [hoveredMetric, setHoveredMetric] = useState<HoverMetric | null>(null);
+  const [hoveredCountdownDomainId, setHoveredCountdownDomainId] = useState<string | null>(null);
+  const [orbitClockOpen, setOrbitClockOpen] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const showCreateRef = useRef(showCreate);
+  const orbitClockDesktopScrollRef = useRef<HTMLDivElement>(null);
+  const orbitClockMobileScrollRef = useRef<HTMLDivElement>(null);
   showCreateRef.current = showCreate;
+
+  const openOrbitClock = useCallback(() => setOrbitClockOpen(true), []);
+  const closeOrbitClock = useCallback(() => {
+    setOrbitClockOpen(false);
+    setHoveredCountdownDomainId(null);
+  }, []);
+  const toggleOrbitClock = useCallback(() => {
+    setOrbitClockOpen((open) => {
+      const next = !open;
+      if (!next) {
+        setHoveredCountdownDomainId(null);
+      }
+      return next;
+    });
+  }, []);
 
   const [radii, setRadii] = useState<number[]>(() => {
     let driftIdx = 0;
@@ -236,6 +274,18 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
   const dragStartRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => { radiiRef.current = radii; }, [radii]);
+
+  useEffect(() => {
+    if (isDemo || editingDemo) return;
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [editingDemo, isDemo]);
+
+  useEffect(() => {
+    if (!orbitClockOpen) return;
+    orbitClockDesktopScrollRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    orbitClockMobileScrollRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [orbitClockOpen]);
 
   // Sync radii & angles when domains are added or removed
   useEffect(() => {
@@ -476,6 +526,42 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
     (domain: DomainData) => effectiveStatus(domain.status) === "ARCHIVED",
   ).length;
   const totalCount = domains.length;
+  const showDriftCountdownWidget = !isDemo && !editingDemo;
+  const activeCountdowns = domains
+    .filter(
+      (domain: DomainData) => effectiveStatus(domain.status) === "ACTIVE",
+    )
+    .map((domain: DomainData) => {
+      const lastCommitmentMs = domain.lastCommitmentAt
+        ? new Date(domain.lastCommitmentAt).getTime()
+        : null;
+      const remainingMs = lastCommitmentMs === null
+        ? null
+        : Math.max(0, lastCommitmentMs + DRIFT_THRESHOLD_MS - nowMs);
+      return {
+        domain,
+        remainingMs,
+        tone: driftCountdownTone(remainingMs),
+        formatted: formatDriftCountdown(remainingMs),
+      };
+    })
+    .sort((a, b) => {
+      if (a.remainingMs === null && b.remainingMs === null) return a.domain.name.localeCompare(b.domain.name);
+      if (a.remainingMs === null) return 1;
+      if (b.remainingMs === null) return -1;
+      return a.remainingMs - b.remainingMs;
+    });
+  const orbitClockClosedSize = 49;
+  const orbitClockExpandedHeight = Math.min(456, 176 + Math.min(activeCountdowns.length, 6) * 48);
+  const orbitClockHeight = orbitClockOpen ? orbitClockExpandedHeight : orbitClockClosedSize;
+  const orbitClockWidth = orbitClockOpen ? 376 : orbitClockClosedSize;
+  const orbitClockMobileClosedSize = 32;
+  const orbitClockMobileHeight = orbitClockOpen
+    ? Math.min(360, 156 + Math.min(activeCountdowns.length, 5) * 42)
+    : orbitClockMobileClosedSize;
+  const orbitClockMobileWidth = orbitClockOpen
+    ? "min(18.5rem, calc(100vw - 0.75rem))"
+    : orbitClockMobileClosedSize;
   const alignable: DomainData[] = domains.filter(
     (domain: DomainData) => effectiveStatus(domain.status) !== "ARCHIVED",
   );
@@ -646,6 +732,222 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
           </div>
         </header>
 
+        {showDriftCountdownWidget && (
+          <div className="pointer-events-none fixed right-10 top-1/2 z-30 hidden -translate-y-1/2 lg:block xl:right-14">
+            <div
+              onPointerEnter={openOrbitClock}
+              onPointerLeave={closeOrbitClock}
+              className={`orbit-clock-shell pointer-events-auto relative transform-gpu transition-[width,height,border-radius,box-shadow,border-color,background-color] duration-[820ms] ease-[cubic-bezier(0.19,1,0.22,1)] ${orbitClockOpen ? "orbit-clock-shell-open overflow-hidden" : "overflow-visible"}`}
+              style={{
+                width: orbitClockWidth,
+                height: orbitClockHeight,
+                borderRadius: orbitClockOpen ? 36 : 999,
+                willChange: "width, height, border-radius, box-shadow",
+              }}
+            >
+              <div className="orbit-clock-sheen" />
+
+              <div
+                className="absolute left-1/2 top-1/2 h-28 w-28 transform-gpu transition-[opacity,transform] duration-[720ms] ease-[cubic-bezier(0.19,1,0.22,1)]"
+                style={{
+                  opacity: orbitClockOpen ? 0 : 1,
+                  transform: `translate(-50%, -50%) scale(${orbitClockOpen ? 0.56 : 0.46})`,
+                  willChange: "transform, opacity",
+                }}
+              >
+                <div className="relative flex h-full w-full items-center justify-center">
+                  <div className="orbit-clock-ring orbit-clock-ring-a" />
+                  <div className="orbit-clock-ring orbit-clock-ring-b" />
+                  <div className="orbit-clock-ring orbit-clock-ring-c" />
+                </div>
+              </div>
+
+              <div
+                className={`absolute inset-0 flex transform-gpu transition-[opacity,transform] duration-[760ms] ease-[cubic-bezier(0.19,1,0.22,1)] ${orbitClockOpen ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-1 opacity-0"}`}
+                style={{ willChange: "transform, opacity" }}
+              >
+                <div className="relative flex w-[118px] shrink-0 items-center justify-center">
+                  <div className="orbit-clock-ring orbit-clock-ring-a orbit-clock-ring-open" />
+                  <div className="orbit-clock-ring orbit-clock-ring-b orbit-clock-ring-open" />
+                  <div className="orbit-clock-ring orbit-clock-ring-c orbit-clock-ring-open" />
+                  <div className="orbit-clock-core orbit-clock-core-open orbit-clock-core-countonly">
+                    <p className="orbit-clock-core-value orbit-clock-core-value-solo">{orbitingCount}</p>
+                  </div>
+                </div>
+
+                  <div className="flex min-w-0 min-h-0 flex-1 flex-col py-5 pl-1 pr-5">
+                  <div className="border-b border-white/[0.06] pb-3">
+                    <p className="orbit-clock-title text-center text-[9px] font-mono uppercase">
+                      countdown till drift
+                    </p>
+                  </div>
+
+                  {activeCountdowns.length > 0 ? (
+                    <div
+                      ref={orbitClockDesktopScrollRef}
+                      className="orbit-clock-scroll mt-4 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1"
+                    >
+                      {activeCountdowns.map((item) => {
+                        const cfg = getDomainCfg(item.domain);
+                        const isRowHovered = hoveredCountdownDomainId === item.domain.id;
+                        return (
+                          <div
+                            key={item.domain.id}
+                            onPointerEnter={() => setHoveredCountdownDomainId(item.domain.id)}
+                            onPointerLeave={() => setHoveredCountdownDomainId(null)}
+                            className="group/clockrow flex items-center justify-between gap-4 rounded-[22px] border border-white/[0.04] bg-black/20 px-4 py-3 transition-all duration-300"
+                            style={{
+                              borderColor: isRowHovered ? `${cfg.color}40` : undefined,
+                              backgroundColor: isRowHovered ? "rgba(255,255,255,0.045)" : undefined,
+                              boxShadow: isRowHovered ? `0 0 24px ${cfg.color}14` : "none",
+                            }}
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <span
+                                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                style={{
+                                  backgroundColor: cfg.color,
+                                  boxShadow: `0 0 10px ${cfg.color}55`,
+                                }}
+                              />
+                              <span className="truncate text-[10px] font-mono uppercase tracking-[0.22em] text-zinc-200">
+                                {item.domain.name}
+                              </span>
+                            </div>
+                            <span
+                              className="shrink-0 tabular-nums text-[10px] font-mono uppercase tracking-[0.16em] transition-colors duration-300"
+                              style={{ color: isRowHovered ? cfg.color : item.tone }}
+                            >
+                              {item.formatted}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex flex-1 items-center justify-center px-6 text-center">
+                      <p className="text-[10px] font-mono uppercase tracking-[0.24em] text-zinc-700">
+                        no planets are active right now
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showDriftCountdownWidget && (
+          <div className="pointer-events-none fixed right-2 top-1/2 z-30 -translate-y-1/2 lg:hidden">
+            <div
+              className={`orbit-clock-shell pointer-events-auto relative transform-gpu transition-[width,height,border-radius,box-shadow,border-color,background-color] duration-[820ms] ease-[cubic-bezier(0.19,1,0.22,1)] ${orbitClockOpen ? "orbit-clock-shell-open overflow-hidden" : "overflow-visible"}`}
+              style={{
+                width: orbitClockMobileWidth,
+                height: orbitClockMobileHeight,
+                borderRadius: orbitClockOpen ? 28 : 999,
+                willChange: "width, height, border-radius, box-shadow",
+              }}
+            >
+              <div className="orbit-clock-sheen" />
+
+              <button
+                type="button"
+                onClick={toggleOrbitClock}
+                aria-expanded={orbitClockOpen}
+                aria-label={orbitClockOpen ? "Collapse drift countdown" : "Expand drift countdown"}
+                className={`absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 bg-transparent p-0 transform-gpu transition-[opacity,transform] duration-[720ms] ease-[cubic-bezier(0.19,1,0.22,1)] ${orbitClockOpen ? "pointer-events-none opacity-0" : "pointer-events-auto opacity-100"}`}
+                style={{
+                  transform: `translate(-50%, -50%) scale(${orbitClockOpen ? 0.36 : 0.32})`,
+                  willChange: "transform, opacity",
+                }}
+              >
+                <div className="relative flex h-full w-full items-center justify-center">
+                  <div className="orbit-clock-ring orbit-clock-ring-a" />
+                  <div className="orbit-clock-ring orbit-clock-ring-b" />
+                  <div className="orbit-clock-ring orbit-clock-ring-c" />
+                </div>
+              </button>
+
+              <div
+                className={`absolute inset-0 flex transform-gpu transition-[opacity,transform] duration-[760ms] ease-[cubic-bezier(0.19,1,0.22,1)] ${orbitClockOpen ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-1 opacity-0"}`}
+                style={{ willChange: "transform, opacity" }}
+              >
+                <button
+                  type="button"
+                  onClick={toggleOrbitClock}
+                  aria-label="Collapse drift countdown"
+                  className="relative flex w-[82px] shrink-0 items-center justify-center bg-transparent p-0"
+                >
+                  <div className="orbit-clock-ring orbit-clock-ring-a orbit-clock-ring-open" />
+                  <div className="orbit-clock-ring orbit-clock-ring-b orbit-clock-ring-open" />
+                  <div className="orbit-clock-ring orbit-clock-ring-c orbit-clock-ring-open" />
+                  <div className="orbit-clock-core orbit-clock-core-open orbit-clock-core-countonly">
+                    <p className="orbit-clock-core-value orbit-clock-core-value-solo">{orbitingCount}</p>
+                  </div>
+                </button>
+
+                <div className="flex min-w-0 min-h-0 flex-1 flex-col py-4 pl-0 pr-4">
+                  <div className="border-b border-white/[0.06] pb-3">
+                    <p className="orbit-clock-title text-center text-[8px] font-mono uppercase">
+                      countdown till drift
+                    </p>
+                  </div>
+
+                  {activeCountdowns.length > 0 ? (
+                    <div
+                      ref={orbitClockMobileScrollRef}
+                      className="orbit-clock-scroll mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1"
+                    >
+                      {activeCountdowns.map((item) => {
+                        const cfg = getDomainCfg(item.domain);
+                        const isRowHovered = hoveredCountdownDomainId === item.domain.id;
+                        return (
+                          <div
+                            key={`mobile-${item.domain.id}`}
+                            onPointerEnter={() => setHoveredCountdownDomainId(item.domain.id)}
+                            onPointerLeave={() => setHoveredCountdownDomainId(null)}
+                            className="flex items-center justify-between gap-3 rounded-[18px] border border-white/[0.04] bg-black/20 px-3 py-2.5 transition-all duration-300"
+                            style={{
+                              borderColor: isRowHovered ? `${cfg.color}40` : undefined,
+                              backgroundColor: isRowHovered ? "rgba(255,255,255,0.045)" : undefined,
+                              boxShadow: isRowHovered ? `0 0 20px ${cfg.color}14` : "none",
+                            }}
+                          >
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <span
+                                className="h-2 w-2 shrink-0 rounded-full"
+                                style={{
+                                  backgroundColor: cfg.color,
+                                  boxShadow: `0 0 8px ${cfg.color}55`,
+                                }}
+                              />
+                              <span className="truncate text-[9px] font-mono uppercase tracking-[0.18em] text-zinc-200">
+                                {item.domain.name}
+                              </span>
+                            </div>
+                            <span
+                              className="shrink-0 tabular-nums text-[9px] font-mono uppercase tracking-[0.12em] transition-colors duration-300"
+                              style={{ color: isRowHovered ? cfg.color : item.tone }}
+                            >
+                              {item.formatted}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex flex-1 items-center justify-center px-4 text-center">
+                      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-700">
+                        no planets are active right now
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Orrery */}
         <div className="flex-1 flex items-center justify-center px-2 md:px-4 py-2 md:py-4">
           <div
@@ -801,7 +1103,9 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
               const isArchived = es === "ARCHIVED";
               const isDrifting = es === "DRIFTING";
               const isDraggingThis = dragging === i;
-              const isHoverMatch = matchesHoverMetric(hoveredMetric, es);
+              const isHoverMatch =
+                matchesHoverMetric(hoveredMetric, es) ||
+                hoveredCountdownDomainId === domain.id;
               const dot = planetSize(radii[i], es);
               return (
                 <div
