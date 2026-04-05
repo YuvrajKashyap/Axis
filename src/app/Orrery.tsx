@@ -196,6 +196,33 @@ function rgba(r: number, g: number, b: number, alpha: number) {
   return `rgba(${r},${g},${b},${clampAlpha(alpha)})`;
 }
 
+function getOrbitPosition(
+  semiMajorRadiusPx: number,
+  angle: number,
+  eccentricityRatio: number,
+) {
+  const x = Math.cos(angle) * semiMajorRadiusPx;
+  const y = Math.sin(angle) * semiMajorRadiusPx * eccentricityRatio;
+
+  return {
+    x,
+    y,
+    orbitalRadiusPx: Math.sqrt(x * x + y * y),
+  };
+}
+
+function getEllipseRingFrame(radius: number, eccentricityRatio: number) {
+  const semiMajor = radius * 50;
+  const semiMinor = semiMajor * eccentricityRatio;
+
+  return {
+    widthPercent: radius * 100,
+    heightPercent: radius * 100 * eccentricityRatio,
+    leftPercent: 50 - semiMajor,
+    topPercent: 50 - semiMinor,
+  };
+}
+
 function buildGlowWithIntensity(
   hex: string,
   status: EffectiveStatus,
@@ -477,7 +504,7 @@ export function Orrery({
   const armRefs = useRef<(HTMLDivElement | null)[]>([]);
   const moverRefs = useRef<(HTMLDivElement | null)[]>([]);
   const counterRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const ringRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const ringRefs = useRef<(SVGSVGElement | null)[]>([]);
   const anglesRef = useRef<number[]>(
     domains.map((_: DomainData, i: number) => getInitialAngle(i)),
   );
@@ -570,9 +597,12 @@ export function Orrery({
     angle: number,
     eccentricityRatio: number = 1,
   ) => {
-    const pxR = radius * (sizeRef.current / 2);
-    const x = Math.cos(angle) * pxR;
-    const y = Math.sin(angle) * pxR * eccentricityRatio;
+    const semiMajorRadiusPx = radius * (sizeRef.current / 2);
+    const { x, y } = getOrbitPosition(
+      semiMajorRadiusPx,
+      angle,
+      eccentricityRatio,
+    );
 
     const arm = armRefs.current[index];
     if (arm) {
@@ -598,12 +628,11 @@ export function Orrery({
     const ring = ringRefs.current[index];
     if (!ring) return;
 
-    const width = `${radius * 100}%`;
-    const height = `${radius * 100 * eccentricityRatio}%`;
-    ring.style.width = width;
-    ring.style.height = height;
-    ring.style.top = `${50 - radius * 50 * eccentricityRatio}%`;
-    ring.style.left = `${50 - radius * 50}%`;
+    const frame = getEllipseRingFrame(radius, eccentricityRatio);
+    ring.style.width = `${frame.widthPercent}%`;
+    ring.style.height = `${frame.heightPercent}%`;
+    ring.style.top = `${frame.topPercent}%`;
+    ring.style.left = `${frame.leftPercent}%`;
   }, []);
 
   /* ── Animation loop ──────────────────────────────────────── */
@@ -617,16 +646,21 @@ export function Orrery({
       // Compute positions for repulsion
       const positions: { x: number; y: number; es: EffectiveStatus }[] = [];
       for (let i = 0; i < domains.length; i++) {
-        const r = radiiRef.current[i] * half;
+        const semiMajorRadiusPx = radiiRef.current[i] * half;
         const a = anglesRef.current[i];
         const es = effectiveStatus(domains[i].status);
         const eccentricityRatio =
           es === "ACTIVE"
             ? getOrbitEccentricityRatio(normalizedSettings[i].orbitEccentricity)
             : 1;
+        const orbitPoint = getOrbitPosition(
+          semiMajorRadiusPx,
+          a,
+          eccentricityRatio,
+        );
         positions.push({
-          x: half + Math.cos(a) * r,
-          y: half + Math.sin(a) * r * eccentricityRatio,
+          x: half + orbitPoint.x,
+          y: half + orbitPoint.y,
           es,
         });
       }
@@ -736,9 +770,14 @@ export function Orrery({
         );
 
         const half = sizeRef.current / 2;
-        const pxR = Math.sqrt(dx * dx + (dy / eccentricityRatio) * (dy / eccentricityRatio));
-        const norm = Math.max(MIN_ORBIT, Math.min(MAX_ORBIT, pxR / half));
+        const semiMajorRadiusPx = Math.sqrt(
+          dx * dx + (dy / eccentricityRatio) * (dy / eccentricityRatio),
+        );
         const angle = Math.atan2(dy / eccentricityRatio, dx);
+        const norm = Math.max(
+          MIN_ORBIT,
+          Math.min(MAX_ORBIT, semiMajorRadiusPx / half),
+        );
 
         anglesRef.current[dIdx] = angle;
         radiiRef.current[dIdx] = norm;
@@ -1264,37 +1303,58 @@ export function Orrery({
                 es === "ACTIVE"
                   ? getOrbitEccentricityRatio(settings.orbitEccentricity)
                   : 1;
+              const ringFrame = getEllipseRingFrame(radii[i], eccentricityRatio);
               const isPulseFocus =
                 returnPulseActive && returnPulseTargetId === domain.id;
               const isDimmedByPulse = returnPulseActive && !isPulseFocus;
               const { r, g, b } = hexToRgb(cfg.color);
               return (
-                <div
+                <svg
                   key={`ring-${domain.id}`}
                   ref={(el) => { ringRefs.current[i] = el; }}
-                  className={`absolute rounded-full orbit-ring-shimmer ${
-                    es === "ARCHIVED" ? "border-dotted" : es === "DRIFTING" ? "border-dashed" : "border-solid"
-                  }`}
+                  className="absolute orbit-ring-shimmer"
+                  aria-hidden
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
                   style={{
-                    borderWidth: es === "ARCHIVED" ? 0.5 : 1,
-                    borderColor: isPulseFocus ? rgba(r, g, b, 0.58) : cfg.ringColor,
                     ["--shimmer-duration" as string]: `${6 + i * 2}s`,
                     ["--shimmer-delay" as string]: `${i * 1.5}s`,
-                    width: `${radii[i] * 100}%`,
-                    height: `${radii[i] * 100 * eccentricityRatio}%`,
-                    top: `${50 - radii[i] * 50 * eccentricityRatio}%`,
-                    left: `${50 - radii[i] * 50}%`,
+                    width: `${ringFrame.widthPercent}%`,
+                    height: `${ringFrame.heightPercent}%`,
+                    top: `${ringFrame.topPercent}%`,
+                    left: `${ringFrame.leftPercent}%`,
                     pointerEvents: "none",
+                    overflow: "visible",
+                    color: isPulseFocus ? rgba(r, g, b, 0.58) : cfg.ringColor,
                     opacity: isDimmedByPulse ? 0.16 : 1,
-                    boxShadow: isPulseFocus
-                      ? `0 0 16px ${rgba(r, g, b, 0.18)}, inset 0 0 24px ${rgba(r, g, b, 0.08)}`
+                    filter: isPulseFocus
+                      ? `drop-shadow(0 0 8px ${rgba(r, g, b, 0.16)}) drop-shadow(0 0 18px ${rgba(r, g, b, 0.1)})`
                       : "none",
-                    transition: dragging === i ? "none" : "border-color 0.3s, opacity 0.4s ease, box-shadow 0.4s ease",
+                    transition: dragging === i ? "none" : "color 0.3s, opacity 0.4s ease, filter 0.4s ease",
                     animation: isPulseFocus
                       ? `ring-shimmer var(--shimmer-duration, 6s) ease-in-out infinite, orrery-return-ring-pulse 3s cubic-bezier(0.22,1,0.36,1) 1`
                       : undefined,
                   }}
-                />
+                >
+                  <ellipse
+                    cx="50"
+                    cy="50"
+                    rx="49"
+                    ry="49"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={es === "ARCHIVED" ? 0.5 : 1}
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                    strokeDasharray={
+                      es === "ARCHIVED"
+                        ? "1.2 7"
+                        : es === "DRIFTING"
+                          ? "7 7"
+                          : undefined
+                    }
+                  />
+                </svg>
               );
             })}
 
@@ -1430,9 +1490,12 @@ export function Orrery({
                 es === "ACTIVE"
                   ? getOrbitEccentricityRatio(settings.orbitEccentricity)
                   : 1;
-              const radiusPx = radii[i] * (sizeRef.current / 2);
-              const x = Math.cos(anglesRef.current[i]) * radiusPx;
-              const y = Math.sin(anglesRef.current[i]) * radiusPx * eccentricityRatio;
+              const semiMajorRadiusPx = radii[i] * (sizeRef.current / 2);
+              const orbitPoint = getOrbitPosition(
+                semiMajorRadiusPx,
+                anglesRef.current[i],
+                eccentricityRatio,
+              );
               return (
                 <div
                   key={`arm-${domain.id}`}
@@ -1452,7 +1515,7 @@ export function Orrery({
                     style={{
                       top: 0,
                       left: 0,
-                      transform: `translate3d(${x}px, ${y}px, 0)`,
+                      transform: `translate3d(${orbitPoint.x}px, ${orbitPoint.y}px, 0)`,
                       willChange: "transform",
                     }}
                     ref={(el) => { moverRefs.current[i] = el; }}
