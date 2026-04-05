@@ -180,6 +180,11 @@ export function DomainSettingsView({
   const previewGlow = getVisualIntensityMultiplier(visualIntensity);
   const previewPlanetSize = getPreviewPlanetSize(planetSizeScale);
   const previewOrbitScaleY = getOrbitEccentricityRatio(orbitEccentricity);
+  const previewSemiMajor = 70;
+  const previewSemiMinor = previewSemiMajor * previewOrbitScaleY;
+  const previewAngle = -0.72;
+  const previewPlanetX = Math.cos(previewAngle) * previewSemiMajor;
+  const previewPlanetY = Math.sin(previewAngle) * previewSemiMinor;
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -491,15 +496,30 @@ export function DomainSettingsView({
             <div className="mt-8 rounded-[24px] border border-white/[0.04] bg-black/40 p-6">
               <div className="relative mx-auto flex h-56 w-full items-center justify-center overflow-hidden rounded-[22px] border border-white/[0.04] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_60%)]">
                 <div className="absolute h-4 w-4 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8),0_0_32px_rgba(255,255,255,0.24)]" />
-                <div
-                  className="absolute rounded-full border"
+                <svg
+                  className="absolute"
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                  aria-hidden
                   style={{
-                    width: 140,
-                    height: 140 * previewOrbitScaleY,
-                    borderColor: `rgba(103,232,249,${0.08 * previewGlow})`,
-                    boxShadow: `0 0 ${24 * previewGlow}px rgba(103,232,249,${0.07 * previewGlow})`,
+                    width: previewSemiMajor * 2,
+                    height: previewSemiMinor * 2,
+                    left: `calc(50% - ${previewSemiMajor}px)`,
+                    top: `calc(50% - ${previewSemiMinor}px)`,
+                    overflow: "visible",
                   }}
-                />
+                >
+                  <ellipse
+                    cx="50"
+                    cy="50"
+                    rx="49"
+                    ry="49"
+                    fill="none"
+                    stroke="rgba(103,232,249,0.08)"
+                    strokeWidth="1"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
                 <div
                   className="absolute rounded-full"
                   style={{
@@ -507,10 +527,16 @@ export function DomainSettingsView({
                     height: previewPlanetSize * 3.4,
                     top: "50%",
                     left: "50%",
-                    transform: `translate(${56}px, ${-previewOrbitScaleY * 36}px) translate(-50%, -50%)`,
+                    transform: `translate(${previewPlanetX}px, ${previewPlanetY}px) translate(-50%, -50%)`,
                     background: `radial-gradient(circle, ${color}22 0%, transparent 72%)`,
-                    filter: `blur(${8 * previewGlow}px)`,
-                    opacity: Math.min(1, 0.72 * previewGlow),
+                    filter:
+                      visualIntensity === "INTENSE"
+                        ? "blur(12px)"
+                        : `blur(${8 * previewGlow}px)`,
+                    opacity:
+                      visualIntensity === "INTENSE"
+                        ? 0.98
+                        : Math.min(1, 0.72 * previewGlow),
                   }}
                 />
                 <div
@@ -520,9 +546,12 @@ export function DomainSettingsView({
                     height: previewPlanetSize,
                     top: "50%",
                     left: "50%",
-                    transform: `translate(${56}px, ${-previewOrbitScaleY * 36}px) translate(-50%, -50%)`,
+                    transform: `translate(${previewPlanetX}px, ${previewPlanetY}px) translate(-50%, -50%)`,
                     backgroundColor: color,
-                    boxShadow: `0 0 ${14 * previewGlow}px ${color}, 0 0 ${32 * previewGlow}px ${color}55`,
+                    boxShadow:
+                      visualIntensity === "INTENSE"
+                        ? `0 0 10px ${color}, 0 0 18px ${color}, 0 0 28px ${color}dd, 0 0 44px ${color}88`
+                        : `0 0 ${14 * previewGlow}px ${color}, 0 0 ${32 * previewGlow}px ${color}55`,
                   }}
                 />
               </div>
