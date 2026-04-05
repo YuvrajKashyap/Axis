@@ -314,7 +314,6 @@ export function DomainView({
   // Editing state
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(domain.name);
-  const [editIdentity, setEditIdentity] = useState(domain.identity ?? "");
   const [editVision, setEditVision] = useState(domain.vision ?? "");
   const [editReason, setEditReason] = useState(domain.primaryReason ?? "");
   const [editCost, setEditCost] = useState(domain.primaryCost ?? "");
@@ -472,7 +471,6 @@ export function DomainView({
         promises.push(updateDomainName(domain.id, editName.trim(), demoUser));
       }
       const fields: Record<string, string> = {};
-      if (editIdentity !== (domain.identity ?? "")) fields.identity = editIdentity;
       if (editVision !== (domain.vision ?? "")) fields.vision = editVision;
       if (editReason !== (domain.primaryReason ?? "")) fields.primaryReason = editReason;
       if (editCost !== (domain.primaryCost ?? "")) fields.primaryCost = editCost;
@@ -489,7 +487,7 @@ export function DomainView({
         router.refresh();
       }
     });
-  }, [alignQuery, demoUser, domain, domainLink, editCost, editIdentity, editName, editReason, editVision, router, startSaveTransition]);
+  }, [alignQuery, demoUser, domain, domainLink, editCost, editName, editReason, editVision, router, startSaveTransition]);
 
   const handleDelete = useCallback(() => {
     startDeleteTransition(async () => {
@@ -721,18 +719,7 @@ export function DomainView({
                 {domain.name}
               </h1>
             )}
-            {editing ? (
-              <input
-                type="text"
-                value={editIdentity}
-                onChange={(e) => setEditIdentity(e.target.value)}
-                placeholder="Identity statement..."
-                className={`mt-5 w-full max-w-sm text-sm text-zinc-400 text-center bg-transparent outline-none border-b border-zinc-800 focus:border-zinc-600 transition-all duration-1000 placeholder:text-zinc-800 ${
-                  mounted ? "opacity-100" : "opacity-0"
-                }`}
-                style={{ transitionDelay: "600ms" }}
-              />
-            ) : domain.identity ? (
+            {!editing && domain.identity ? (
               <p
                 className={`mt-5 max-w-sm text-sm text-zinc-600 text-center transition-all duration-1000 ${
                   mounted ? "opacity-100" : "opacity-0"
