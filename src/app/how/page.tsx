@@ -89,10 +89,10 @@ export default function HowItWorksPage() {
               Drift
             </h2>
             <p className="text-zinc-400 leading-relaxed text-[15px]">
-              If you don&apos;t make a commitment in a domain for 72 hours, that planet
-              automatically drifts out of orbit. Not a punishment. A signal.
-              Make a new commitment and it comes back. The system reflects
-              reality, not aspirations.
+              By default, planets drift after 72 hours without commitment.
+              You can change that per planet in Settings. Not a punishment.
+              A signal. Make a new commitment and it comes back. The system
+              reflects reality, not aspirations.
             </p>
           </section>
 

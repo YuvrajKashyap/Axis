@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useTransition,
@@ -11,6 +12,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { updateOrbit, resetOrbits, createDomain } from "./orrery-actions";
 import { logout } from "@/lib/auth-actions";
+import {
+  getEffectiveDriftThresholdMs,
+  getOrbitEccentricityRatio,
+  getOrbitSpeedMultiplier,
+  getVisualIntensityMultiplier,
+  normalizeDomainSettings,
+  type DomainSettingsSnapshot,
+} from "@/lib/domain-settings";
 import "./orrery.css";
 
 /* ── Types ────────────────────────────────────────────────────── */
@@ -27,6 +36,8 @@ export type DomainData = {
   color: string | null;
   autoDrifted: boolean;
   lastCommitmentAt?: string | null;
+  lastRelevantActivityAt?: string | null;
+  settings?: DomainSettingsSnapshot;
 };
 
 type EffectiveStatus = "ACTIVE" | "DRIFTING" | "ARCHIVED";
@@ -64,7 +75,6 @@ const ARCHIVE_BASE_RADIUS = 1.25;
 const DEFAULT_ACTIVE_COLOR = "#67e8f9";
 const DEFAULT_DRIFTING_COLOR = "#f87171";
 const DEFAULT_ARCHIVED_COLOR = "#71717a";
-const DRIFT_THRESHOLD_MS = 72 * 60 * 60 * 1000;
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const h = hex.replace("#", "");
@@ -98,14 +108,65 @@ function buildGlow(hex: string, status: EffectiveStatus) {
   };
 }
 
+function clampAlpha(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function rgba(r: number, g: number, b: number, alpha: number) {
+  return `rgba(${r},${g},${b},${clampAlpha(alpha)})`;
+}
+
+function buildGlowWithIntensity(
+  hex: string,
+  status: EffectiveStatus,
+  intensityMultiplier: number,
+) {
+  if (intensityMultiplier === 1) {
+    return buildGlow(hex, status);
+  }
+
+  const { r, g, b } = hexToRgb(hex);
+  if (status === "ARCHIVED") {
+    return {
+      color: hex,
+      glow: `0 0 4px ${rgba(r, g, b, 0.3 * intensityMultiplier)}, 0 0 10px ${rgba(r, g, b, 0.1 * intensityMultiplier)}`,
+      glowSoft: `0 0 3px ${rgba(r, g, b, 0.2 * intensityMultiplier)}`,
+      ringColor: rgba(r, g, b, 0.03 * intensityMultiplier),
+      label: "Archived",
+    };
+  }
+
+  const isDrifting = status === "DRIFTING";
+  const primaryAlpha = isDrifting ? 0.8 : 0.9;
+  const secondaryAlpha = isDrifting ? 0.4 : 0.5;
+  const tertiaryAlpha = 0.15;
+
+  return {
+    color: hex,
+    glow: `0 0 8px ${rgba(r, g, b, primaryAlpha * intensityMultiplier)}, 0 0 22px ${rgba(r, g, b, secondaryAlpha * intensityMultiplier)}, 0 0 50px ${rgba(r, g, b, tertiaryAlpha * intensityMultiplier)}`,
+    glowSoft: `0 0 6px ${rgba(r, g, b, 0.4 * intensityMultiplier)}`,
+    ringColor: rgba(r, g, b, (isDrifting ? 0.06 : 0.10) * intensityMultiplier),
+    label: isDrifting ? "Drifting" : "Active",
+  };
+}
+
+function getNormalizedSettings(domain: DomainData): DomainSettingsSnapshot {
+  return normalizeDomainSettings(domain.settings);
+}
+
 function getDomainCfg(d: DomainData) {
   const es = effectiveStatus(d.status);
+  const settings = getNormalizedSettings(d);
   const color = d.color ?? (
     es === "ARCHIVED" ? DEFAULT_ARCHIVED_COLOR :
     es === "DRIFTING" ? DEFAULT_DRIFTING_COLOR :
     DEFAULT_ACTIVE_COLOR
   );
-  return buildGlow(color, es);
+  return buildGlowWithIntensity(
+    color,
+    es,
+    getVisualIntensityMultiplier(settings.visualIntensity),
+  );
 }
 
 function matchesHoverMetric(metric: HoverMetric | null, status: EffectiveStatus): boolean {
@@ -174,12 +235,24 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 const SUN_CORE = 18;
 const MAX_PLANET = Math.round(SUN_CORE * 0.65); // ~12px — never rival the sun
+const MAX_PLANET_SCALE_CAP = SUN_CORE * 0.7;
 
-function planetSize(normalizedRadius: number, status: EffectiveStatus): number {
-  if (status === "ARCHIVED") return 4;
-  if (status === "DRIFTING") return 6;
+function planetSize(
+  normalizedRadius: number,
+  status: EffectiveStatus,
+  sizeScale: number,
+): number {
+  const scaled = (base: number) => {
+    if (status === "ACTIVE") {
+      return Math.min(MAX_PLANET_SCALE_CAP, base * sizeScale);
+    }
+    return Math.max(1.8, base * sizeScale);
+  };
+
+  if (status === "DRIFTING") return scaled(6);
+  if (status === "ARCHIVED") return scaled(4);
   // Active: closer → bigger, capped at MAX_PLANET
-  return 7 + (1 - normalizedRadius / MAX_ORBIT) * (MAX_PLANET - 7);
+  return scaled(7 + (1 - normalizedRadius / MAX_ORBIT) * (MAX_PLANET - 7));
 }
 
 /* ── Component ────────────────────────────────────────────────── */
@@ -190,6 +263,7 @@ type OrreryProps = {
   isAdmin?: boolean;
   editingDemo?: boolean;
   demoUserId?: string;
+  returnPulseDomainId?: string | null;
 };
 
 type IndexedDomain = {
@@ -197,7 +271,14 @@ type IndexedDomain = {
   index: number;
 };
 
-export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo = false, demoUserId }: OrreryProps) {
+export function Orrery({
+  domains,
+  isDemo = false,
+  isAdmin = false,
+  editingDemo = false,
+  demoUserId,
+  returnPulseDomainId = null,
+}: OrreryProps) {
   const router = useRouter();
   const [stars, setStars] = useState<Star[]>([]);
   useEffect(() => { setStars(generateStars(220)); }, []);
@@ -224,10 +305,17 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
   const [hoveredCountdownDomainId, setHoveredCountdownDomainId] = useState<string | null>(null);
   const [orbitClockOpen, setOrbitClockOpen] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [returnPulseActive, setReturnPulseActive] = useState(false);
+  const [returnPulseTargetId, setReturnPulseTargetId] = useState<string | null>(null);
   const showCreateRef = useRef(showCreate);
   const orbitClockDesktopScrollRef = useRef<HTMLDivElement>(null);
   const orbitClockMobileScrollRef = useRef<HTMLDivElement>(null);
   showCreateRef.current = showCreate;
+
+  const normalizedSettings = useMemo(
+    () => domains.map((domain: DomainData) => getNormalizedSettings(domain)),
+    [domains],
+  );
 
   const openOrbitClock = useCallback(() => setOrbitClockOpen(true), []);
   const closeOrbitClock = useCallback(() => {
@@ -287,6 +375,35 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
     orbitClockMobileScrollRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [orbitClockOpen]);
 
+  useEffect(() => {
+    if (!returnPulseDomainId) return;
+
+    setReturnPulseTargetId(returnPulseDomainId);
+    setReturnPulseActive(true);
+
+    const fadeTimer = window.setTimeout(() => {
+      setReturnPulseActive(false);
+    }, 3000);
+    const clearTimer = window.setTimeout(() => {
+      setReturnPulseTargetId(null);
+    }, 3400);
+    const cleanupUrlTimer = window.setTimeout(() => {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has("pulseDomain")) return;
+      url.searchParams.delete("pulseDomain");
+      const query = url.searchParams.toString();
+      router.replace(query ? `${url.pathname}?${query}` : url.pathname, {
+        scroll: false,
+      });
+    }, 3200);
+
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(clearTimer);
+      window.clearTimeout(cleanupUrlTimer);
+    };
+  }, [returnPulseDomainId, router]);
+
   // Sync radii & angles when domains are added or removed
   useEffect(() => {
     if (domains.length !== radiiRef.current.length) {
@@ -319,35 +436,46 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
     return () => obs.disconnect();
   }, []);
 
-  const setPlanetTransforms = useCallback((index: number, radius: number, angle: number) => {
+  const setPlanetTransforms = useCallback((
+    index: number,
+    radius: number,
+    angle: number,
+    eccentricityRatio: number = 1,
+  ) => {
     const pxR = radius * (sizeRef.current / 2);
+    const x = Math.cos(angle) * pxR;
+    const y = Math.sin(angle) * pxR * eccentricityRatio;
 
     const arm = armRefs.current[index];
     if (arm) {
-      arm.style.transform = `rotate(${angle}rad)`;
+      arm.style.transform = "translate3d(0, 0, 0)";
     }
 
     const mover = moverRefs.current[index];
     if (mover) {
-      mover.style.transform = `translate3d(${pxR}px, 0, 0)`;
+      mover.style.transform = `translate3d(${x}px, ${y}px, 0)`;
     }
 
     const counter = counterRefs.current[index];
     if (counter) {
-      counter.style.transform = `rotate(${-angle}rad)`;
+      counter.style.transform = "rotate(0deg)";
     }
   }, []);
 
-  const setRingRadius = useCallback((index: number, radius: number) => {
+  const setRingRadius = useCallback((
+    index: number,
+    radius: number,
+    eccentricityRatio: number = 1,
+  ) => {
     const ring = ringRefs.current[index];
     if (!ring) return;
 
-    const diameter = `${radius * 100}%`;
-    const offset = `${50 - radius * 50}%`;
-    ring.style.width = diameter;
-    ring.style.height = diameter;
-    ring.style.top = offset;
-    ring.style.left = offset;
+    const width = `${radius * 100}%`;
+    const height = `${radius * 100 * eccentricityRatio}%`;
+    ring.style.width = width;
+    ring.style.height = height;
+    ring.style.top = `${50 - radius * 50 * eccentricityRatio}%`;
+    ring.style.left = `${50 - radius * 50}%`;
   }, []);
 
   /* ── Animation loop ──────────────────────────────────────── */
@@ -363,10 +491,15 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
       for (let i = 0; i < domains.length; i++) {
         const r = radiiRef.current[i] * half;
         const a = anglesRef.current[i];
+        const es = effectiveStatus(domains[i].status);
+        const eccentricityRatio =
+          es === "ACTIVE"
+            ? getOrbitEccentricityRatio(normalizedSettings[i].orbitEccentricity)
+            : 1;
         positions.push({
           x: half + Math.cos(a) * r,
-          y: half + Math.sin(a) * r,
-          es: effectiveStatus(domains[i].status),
+          y: half + Math.sin(a) * r * eccentricityRatio,
+          es,
         });
       }
 
@@ -413,8 +546,19 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
           setPlanetTransforms(i, radiiRef.current[i] + wobbleR, anglesRef.current[i]);
         } else {
           // Normal orbit
-          anglesRef.current[i] += getOrbitSpeed(i) * dt;
-          setPlanetTransforms(i, radiiRef.current[i], anglesRef.current[i]);
+          const orbitSpeedMultiplier = getOrbitSpeedMultiplier(
+            normalizedSettings[i].orbitSpeed,
+          );
+          const eccentricityRatio = getOrbitEccentricityRatio(
+            normalizedSettings[i].orbitEccentricity,
+          );
+          anglesRef.current[i] += getOrbitSpeed(i) * orbitSpeedMultiplier * dt;
+          setPlanetTransforms(
+            i,
+            radiiRef.current[i],
+            anglesRef.current[i],
+            eccentricityRatio,
+          );
         }
       }
 
@@ -423,7 +567,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
 
     rafRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [domains, setPlanetTransforms]);
+  }, [domains, normalizedSettings, setPlanetTransforms]);
 
   /* ── Drag handlers ───────────────────────────────────────── */
 
@@ -459,16 +603,19 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
         const cy = rect.top + rect.height / 2;
         const dx = ev.clientX - cx;
         const dy = ev.clientY - cy;
+        const eccentricityRatio = getOrbitEccentricityRatio(
+          normalizedSettings[dIdx].orbitEccentricity,
+        );
 
         const half = sizeRef.current / 2;
-        const pxR = Math.sqrt(dx * dx + dy * dy);
+        const pxR = Math.sqrt(dx * dx + (dy / eccentricityRatio) * (dy / eccentricityRatio));
         const norm = Math.max(MIN_ORBIT, Math.min(MAX_ORBIT, pxR / half));
-        const angle = Math.atan2(dy, dx);
+        const angle = Math.atan2(dy / eccentricityRatio, dx);
 
         anglesRef.current[dIdx] = angle;
         radiiRef.current[dIdx] = norm;
-        setPlanetTransforms(dIdx, norm, angle);
-        setRingRadius(dIdx, norm);
+        setPlanetTransforms(dIdx, norm, angle, eccentricityRatio);
+        setRingRadius(dIdx, norm, eccentricityRatio);
       };
 
       const onUp = () => {
@@ -499,7 +646,17 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
     },
-    [demoUserId, domainUrl, domains, editingDemo, isDemo, router, setPlanetTransforms, setRingRadius],
+    [
+      demoUserId,
+      domainUrl,
+      domains,
+      editingDemo,
+      isDemo,
+      normalizedSettings,
+      router,
+      setPlanetTransforms,
+      setRingRadius,
+    ],
   );
 
   /* ── Keyboard navigation (1–9) ──────────────────────────── */
@@ -528,24 +685,36 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
   const totalCount = domains.length;
   const showDriftCountdownWidget = !isDemo && !editingDemo;
   const activeCountdowns = domains
+    .map((domain: DomainData, index: number) => ({
+      domain,
+      settings: normalizedSettings[index],
+    }))
     .filter(
-      (domain: DomainData) => effectiveStatus(domain.status) === "ACTIVE",
+      ({ domain }: { domain: DomainData; settings: DomainSettingsSnapshot }) =>
+        effectiveStatus(domain.status) === "ACTIVE",
     )
-    .map((domain: DomainData) => {
-      const lastCommitmentMs = domain.lastCommitmentAt
-        ? new Date(domain.lastCommitmentAt).getTime()
+    .map(({ domain, settings }: { domain: DomainData; settings: DomainSettingsSnapshot }) => {
+      const driftThresholdMs = getEffectiveDriftThresholdMs(settings);
+      const lastRelevantActivityMs = domain.lastRelevantActivityAt
+        ? new Date(domain.lastRelevantActivityAt).getTime()
         : null;
-      const remainingMs = lastCommitmentMs === null
-        ? null
-        : Math.max(0, lastCommitmentMs + DRIFT_THRESHOLD_MS - nowMs);
+      const driftDisabled = driftThresholdMs === null;
+      const remainingMs =
+        driftDisabled || lastRelevantActivityMs === null || driftThresholdMs === null
+          ? null
+          : Math.max(0, lastRelevantActivityMs + driftThresholdMs - nowMs);
       return {
         domain,
+        driftDisabled,
         remainingMs,
-        tone: driftCountdownTone(remainingMs),
-        formatted: formatDriftCountdown(remainingMs),
+        tone: driftDisabled ? "#67e8f9" : driftCountdownTone(remainingMs),
+        formatted: driftDisabled ? "DEACTIVATED DRIFT" : formatDriftCountdown(remainingMs),
       };
     })
     .sort((a, b) => {
+      if (a.driftDisabled && b.driftDisabled) return a.domain.name.localeCompare(b.domain.name);
+      if (a.driftDisabled) return 1;
+      if (b.driftDisabled) return -1;
       if (a.remainingMs === null && b.remainingMs === null) return a.domain.name.localeCompare(b.domain.name);
       if (a.remainingMs === null) return 1;
       if (b.remainingMs === null) return -1;
@@ -962,6 +1131,15 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
             {domains.map((domain: DomainData, i: number) => {
               const es = effectiveStatus(domain.status);
               const cfg = getDomainCfg(domain);
+              const settings = normalizedSettings[i];
+              const eccentricityRatio =
+                es === "ACTIVE"
+                  ? getOrbitEccentricityRatio(settings.orbitEccentricity)
+                  : 1;
+              const isPulseFocus =
+                returnPulseActive && returnPulseTargetId === domain.id;
+              const isDimmedByPulse = returnPulseActive && !isPulseFocus;
+              const { r, g, b } = hexToRgb(cfg.color);
               return (
                 <div
                   key={`ring-${domain.id}`}
@@ -971,15 +1149,22 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                   }`}
                   style={{
                     borderWidth: es === "ARCHIVED" ? 0.5 : 1,
-                    borderColor: cfg.ringColor,
+                    borderColor: isPulseFocus ? rgba(r, g, b, 0.58) : cfg.ringColor,
                     ["--shimmer-duration" as string]: `${6 + i * 2}s`,
                     ["--shimmer-delay" as string]: `${i * 1.5}s`,
                     width: `${radii[i] * 100}%`,
-                    height: `${radii[i] * 100}%`,
-                    top: `${50 - radii[i] * 50}%`,
+                    height: `${radii[i] * 100 * eccentricityRatio}%`,
+                    top: `${50 - radii[i] * 50 * eccentricityRatio}%`,
                     left: `${50 - radii[i] * 50}%`,
                     pointerEvents: "none",
-                    transition: dragging === i ? "none" : "border-color 0.3s",
+                    opacity: isDimmedByPulse ? 0.16 : 1,
+                    boxShadow: isPulseFocus
+                      ? `0 0 16px ${rgba(r, g, b, 0.18)}, inset 0 0 24px ${rgba(r, g, b, 0.08)}`
+                      : "none",
+                    transition: dragging === i ? "none" : "border-color 0.3s, opacity 0.4s ease, box-shadow 0.4s ease",
+                    animation: isPulseFocus
+                      ? `ring-shimmer var(--shimmer-duration, 6s) ease-in-out infinite, orrery-return-ring-pulse 3s cubic-bezier(0.22,1,0.36,1) 1`
+                      : undefined,
                   }}
                 />
               );
@@ -1100,13 +1285,26 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
             {domains.map((domain: DomainData, i: number) => {
               const es = effectiveStatus(domain.status);
               const cfg = getDomainCfg(domain);
+              const settings = normalizedSettings[i];
               const isArchived = es === "ARCHIVED";
               const isDrifting = es === "DRIFTING";
               const isDraggingThis = dragging === i;
+              const isPulseFocus =
+                returnPulseActive && returnPulseTargetId === domain.id;
+              const isDimmedByPulse = returnPulseActive && !isPulseFocus;
               const isHoverMatch =
-                matchesHoverMetric(hoveredMetric, es) ||
-                hoveredCountdownDomainId === domain.id;
-              const dot = planetSize(radii[i], es);
+                !returnPulseActive &&
+                (matchesHoverMetric(hoveredMetric, es) ||
+                  hoveredCountdownDomainId === domain.id);
+              const isHighlightMatch = isHoverMatch || isPulseFocus;
+              const dot = planetSize(radii[i], es, settings.planetSizeScale);
+              const eccentricityRatio =
+                es === "ACTIVE"
+                  ? getOrbitEccentricityRatio(settings.orbitEccentricity)
+                  : 1;
+              const radiusPx = radii[i] * (sizeRef.current / 2);
+              const x = Math.cos(anglesRef.current[i]) * radiusPx;
+              const y = Math.sin(anglesRef.current[i]) * radiusPx * eccentricityRatio;
               return (
                 <div
                   key={`arm-${domain.id}`}
@@ -1117,7 +1315,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                     width: 0,
                     height: 0,
                     transformOrigin: "0px 0px",
-                    transform: `rotate(${anglesRef.current[i]}rad)`,
+                    transform: "translate3d(0, 0, 0)",
                     willChange: "transform",
                   }}
                 >
@@ -1126,7 +1324,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                     style={{
                       top: 0,
                       left: 0,
-                      transform: `translate3d(${radii[i] * (sizeRef.current / 2)}px, 0, 0)`,
+                      transform: `translate3d(${x}px, ${y}px, 0)`,
                       willChange: "transform",
                     }}
                     ref={(el) => { moverRefs.current[i] = el; }}
@@ -1139,9 +1337,11 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                         top: -(dot / 2),
                         width: dot,
                         height: dot,
-                        transform: `rotate(${-anglesRef.current[i]}rad)`,
+                        transform: "rotate(0deg)",
                         transformOrigin: "center center",
                         willChange: "transform",
+                        opacity: isDimmedByPulse ? 0.18 : 1,
+                        transition: "opacity 0.4s ease",
                       }}
                       ref={(el) => { counterRefs.current[i] = el; }}
                     >
@@ -1163,10 +1363,13 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                             width: dot * (isArchived ? 2.5 : isDrifting ? 5 : 3.5),
                           height: dot * (isArchived ? 2.5 : isDrifting ? 5 : 3.5),
                           background: `radial-gradient(circle, ${cfg.color}${isArchived ? "10" : isDrifting ? "20" : "15"} 0%, transparent 70%)`,
-                          opacity: isHoverMatch ? (isArchived ? 0.8 : 0.95) : undefined,
-                          filter: isHoverMatch ? "brightness(1.14) saturate(1.08)" : "none",
+                          opacity: isHighlightMatch ? (isArchived ? 0.8 : 0.95) : undefined,
+                          filter: isHighlightMatch ? "brightness(1.14) saturate(1.08)" : "none",
                           transition: "transform 0.25s ease, opacity 0.25s ease, filter 0.25s ease",
-                          transform: isDraggingThis ? "scale(1.8)" : isHoverMatch ? "scale(1.14)" : "scale(1)",
+                          transform: isDraggingThis ? "scale(1.8)" : isHighlightMatch ? "scale(1.14)" : "scale(1)",
+                          animation: isPulseFocus
+                            ? "orrery-return-halo-pulse 3s cubic-bezier(0.22,1,0.36,1) 1"
+                            : undefined,
                         }}
                       />
                         {/* Dot */}
@@ -1176,11 +1379,18 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                           width: dot,
                           height: dot,
                           backgroundColor: cfg.color,
-                          boxShadow: isHoverMatch ? `${cfg.glow}, ${cfg.glowSoft}, 0 0 18px ${cfg.color}33` : cfg.glow,
+                          boxShadow: isPulseFocus
+                            ? `${cfg.glow}, ${cfg.glowSoft}, 0 0 22px ${cfg.color}44, 0 0 60px ${cfg.color}22`
+                            : isHoverMatch
+                              ? `${cfg.glow}, ${cfg.glowSoft}, 0 0 18px ${cfg.color}33`
+                              : cfg.glow,
                           opacity: isArchived ? 0.4 : 1,
-                          filter: isHoverMatch ? "brightness(1.18) saturate(1.08)" : "none",
+                          filter: isHighlightMatch ? "brightness(1.18) saturate(1.08)" : "none",
                           transition: "transform 0.2s ease, box-shadow 0.25s ease, filter 0.25s ease",
-                          transform: isDraggingThis ? "scale(1.4)" : isHoverMatch ? "scale(1.08)" : "scale(1)",
+                          transform: isDraggingThis ? "scale(1.4)" : isHighlightMatch ? "scale(1.08)" : "scale(1)",
+                          animation: isPulseFocus
+                            ? "orrery-return-planet-pulse 3s cubic-bezier(0.22,1,0.36,1) 1"
+                            : undefined,
                         }}
                       />
                       </div>
@@ -1194,11 +1404,14 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                           className="text-[10px] font-mono tracking-[0.2em] uppercase text-center transition-colors"
                           style={{
                             color: isArchived
-                              ? (isHoverMatch ? "rgba(228,228,231,0.88)" : "rgba(113,113,122,0.4)")
+                              ? (isHighlightMatch ? "rgba(228,228,231,0.88)" : "rgba(113,113,122,0.4)")
                               : isDrifting
-                                ? (isHoverMatch ? "#fca5a5" : "#f87171")
-                                : (isDraggingThis || isHoverMatch ? cfg.color : "rgba(161,161,170,0.7)"),
-                            textShadow: isHoverMatch ? `0 0 14px ${cfg.color}2e` : isDrifting ? "0 0 8px rgba(248,113,113,0.4)" : "none",
+                                ? (isHighlightMatch ? "#fca5a5" : "#f87171")
+                                : (isDraggingThis || isHighlightMatch ? cfg.color : "rgba(161,161,170,0.7)"),
+                            textShadow: isHighlightMatch ? `0 0 14px ${cfg.color}2e` : isDrifting ? "0 0 8px rgba(248,113,113,0.4)" : "none",
+                            animation: isPulseFocus
+                              ? "orrery-return-label-pulse 3s cubic-bezier(0.22,1,0.36,1) 1"
+                              : undefined,
                           }}
                         >
                           {domain.name}
@@ -1208,7 +1421,7 @@ export function Orrery({ domains, isDemo = false, isAdmin = false, editingDemo =
                             className="text-[8px] font-mono tracking-widest uppercase text-center mt-0.5 transition-opacity"
                             style={{
                               color: isDrifting ? "rgba(248,113,113,0.5)" : cfg.color,
-                              opacity: isHoverMatch ? 0.9 : isArchived ? 0.25 : 0.7,
+                              opacity: isHighlightMatch ? 0.9 : isArchived ? 0.25 : 0.7,
                             }}
                           >
                             {cfg.label}
