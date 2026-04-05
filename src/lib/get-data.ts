@@ -1,8 +1,9 @@
+import { computeDriftState } from "@/lib/drift";
 import { prisma } from "@/lib/prisma";
 
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "";
+export const DEMO_EMAIL = "demo@axis.internal";
 
-const DRIFT_THRESHOLD_MS = 72 * 60 * 60 * 1000; // 72 hours
 const DEMO_PASSWORD_HASH =
   "$2b$10$PUMSZkfC5bjw9oxLoFxgtO0gBVyAm.8RNbhBMesDW7qsHMQxZrMb6";
 
@@ -10,7 +11,10 @@ type GetDomainsOptions = {
   disableAutoDrift?: boolean;
 };
 
-export async function getDomains(userId: string, options: GetDomainsOptions = {}) {
+export async function getDomains(
+  userId: string,
+  options: GetDomainsOptions = {},
+) {
   const { disableAutoDrift = false } = options;
   const domains = await prisma.domain.findMany({
     where: { userId },
@@ -19,32 +23,35 @@ export async function getDomains(userId: string, options: GetDomainsOptions = {}
       commitments: {
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { createdAt: true },
+        select: { createdAt: true, text: true },
       },
     },
   });
 
   return domains.map((domain: (typeof domains)[number]) => {
     const lastCommitmentAt = domain.commitments[0]?.createdAt ?? null;
-    const isStale =
-      !lastCommitmentAt ||
-      Date.now() - lastCommitmentAt.getTime() > DRIFT_THRESHOLD_MS;
-
-    // ARCHIVED takes precedence — never auto-drift archived domains
-    // Only auto-drift if user's explicit status is active (ALIGNED/NEUTRAL)
-    const autoDrifted =
-      !disableAutoDrift &&
-      domain.status !== "DRIFTING" &&
-      domain.status !== "ARCHIVED" &&
-      isStale;
-
-    const effectiveStatus = autoDrifted ? "DRIFTING" : domain.status;
+    const driftState = computeDriftState({
+      status: domain.status,
+      driftMode: domain.driftMode,
+      driftThresholdHours: domain.driftThresholdHours,
+      commitmentRequirement: domain.commitmentRequirement,
+      lastCommitmentAt,
+      lastPassiveAlignmentAt: domain.lastPassiveAlignmentAt,
+      disableAutoDrift,
+    });
 
     return {
       ...domain,
-      effectiveStatus: effectiveStatus as "ALIGNED" | "NEUTRAL" | "DRIFTING" | "ARCHIVED",
+      effectiveStatus: driftState.effectiveStatus as
+        | "ALIGNED"
+        | "NEUTRAL"
+        | "DRIFTING"
+        | "ARCHIVED",
       lastCommitmentAt,
-      autoDrifted,
+      lastRelevantActivityAt: driftState.lastRelevantActivityAt,
+      nextDriftAt: driftState.nextDriftAt,
+      effectiveDriftThresholdHours: driftState.driftThresholdHours,
+      autoDrifted: driftState.autoDrifted,
     };
   });
 }
@@ -52,8 +59,6 @@ export async function getDomains(userId: string, options: GetDomainsOptions = {}
 export type DomainList = Awaited<ReturnType<typeof getDomains>>;
 export type DomainListItem = DomainList[number];
 export type DomainListStatus = DomainListItem["status"];
-
-const DEMO_EMAIL = "demo@axis.internal";
 
 export async function getOrCreateDemoUserId(): Promise<string | null> {
   let demo = await prisma.user.findUnique({
@@ -81,6 +86,8 @@ export async function getDemoDomains() {
   return getDomains(demoUserId, { disableAutoDrift: true });
 }
 
-export async function isAdmin(email: string | null | undefined): Promise<boolean> {
+export async function isAdmin(
+  email: string | null | undefined,
+): Promise<boolean> {
   return !!email && !!ADMIN_EMAIL && email === ADMIN_EMAIL;
 }

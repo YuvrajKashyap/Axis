@@ -35,6 +35,16 @@ model Domain {
   proof          String?
   color          String?
   status      DomainStatus   @default(NEUTRAL)
+  driftMode   DomainDriftMode @default(PRESET)
+  driftThresholdHours Int     @default(72)
+  commitmentRequirement DomainCommitmentRequirement @default(STANDARD)
+  orbitSpeed DomainOrbitSpeed @default(STANDARD)
+  visualIntensity DomainVisualIntensity @default(BALANCED)
+  planetSizeScale Float @default(1)
+  orbitEccentricity DomainOrbitEccentricity @default(DEFAULT)
+  lastPassiveAlignmentAt DateTime?
+  lastDriftWarningSentAt DateTime?
+  lastDriftWarningActivityAt DateTime?
 
   positionX   Float          @default(0)
   positionY   Float          @default(0)
@@ -79,4 +89,34 @@ enum DomainStatus {
   NEUTRAL
   DRIFTING
   ARCHIVED
+}
+
+enum DomainDriftMode {
+  PRESET
+  CUSTOM
+  NEVER
+}
+
+enum DomainCommitmentRequirement {
+  STANDARD
+  PASSIVE_ALIGNMENT
+}
+
+enum DomainOrbitSpeed {
+  STILL
+  SLOW
+  STANDARD
+  FAST
+}
+
+enum DomainVisualIntensity {
+  SUBTLE
+  BALANCED
+  INTENSE
+}
+
+enum DomainOrbitEccentricity {
+  DEFAULT
+  SLIGHTLY_ELLIPTICAL
+  VERY_ELLIPTICAL
 }
