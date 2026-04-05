@@ -1,38 +1,19 @@
 'use server';
 
+import { scheduleDomainDriftWarning } from "@/lib/drift-warning";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
-import { getOrCreateDemoUserId, isAdmin } from "@/lib/get-data";
+import { getAuthorizedTargetUserId } from "@/lib/target-user";
 import { revalidatePath } from "next/cache";
 
 type CreateCommitmentResult =
   | { success: true }
   | { success: false; error: string };
 
-async function getAuthorizedTargetUserId(targetUserId?: string) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return null;
-  }
-
-  const sessionUserId = session.user.id;
-
-  if (!targetUserId || targetUserId === sessionUserId) {
-    return sessionUserId;
-  }
-
-  const admin = await isAdmin(session.user.email);
-  if (!admin) {
-    return null;
-  }
-
-  const demoUserId = await getOrCreateDemoUserId();
-  if (!demoUserId || targetUserId !== demoUserId) {
-    return null;
-  }
-
-  return demoUserId;
-}
+type CommitmentRecord = {
+  id: string;
+  text: string;
+  createdAt: string;
+};
 
 export async function updateDomainStatus(
   domainId: string,
@@ -48,6 +29,8 @@ export async function updateDomainStatus(
     where: { id: domainId, userId },
     data: { status },
   });
+
+  await scheduleDomainDriftWarning(domainId);
   revalidatePath("/");
 }
 
@@ -105,6 +88,7 @@ export async function createCommitment(
       },
     });
 
+    await scheduleDomainDriftWarning(domain.id);
     revalidatePath("/");
     return { success: true };
   } catch {
@@ -113,6 +97,64 @@ export async function createCommitment(
       error: "Failed to create commitment.",
     };
   }
+}
+
+export async function recordPassiveAlignmentTouch(
+  domainId: string,
+  targetUserId?: string,
+) {
+  const userId = await getAuthorizedTargetUserId(targetUserId);
+  if (!userId) {
+    return { success: false };
+  }
+
+  const domain = await prisma.domain.findFirst({
+    where: { id: domainId, userId },
+    select: {
+      id: true,
+      commitmentRequirement: true,
+    },
+  });
+
+  if (!domain || domain.commitmentRequirement !== "PASSIVE_ALIGNMENT") {
+    return { success: false };
+  }
+
+  await prisma.domain.updateMany({
+    where: { id: domain.id, userId },
+    data: {
+      lastPassiveAlignmentAt: new Date(),
+    },
+  });
+
+  await scheduleDomainDriftWarning(domain.id);
+  revalidatePath("/");
+  return { success: true };
+}
+
+export async function loadAllCommitments(
+  domainId: string,
+  targetUserId?: string,
+): Promise<CommitmentRecord[]> {
+  const userId = await getAuthorizedTargetUserId(targetUserId);
+  if (!userId) {
+    return [];
+  }
+
+  const commitments = await prisma.commitment.findMany({
+    where: { domainId, userId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      text: true,
+      createdAt: true,
+    },
+  });
+
+  return commitments.map((commitment) => ({
+    ...commitment,
+    createdAt: commitment.createdAt.toISOString(),
+  }));
 }
 
 export async function clearCommitments(domainId: string, targetUserId?: string) {
@@ -138,7 +180,11 @@ export async function deleteDomain(domainId: string, targetUserId?: string) {
   revalidatePath("/");
 }
 
-export async function updateDomainName(domainId: string, name: string, targetUserId?: string) {
+export async function updateDomainName(
+  domainId: string,
+  name: string,
+  targetUserId?: string,
+) {
   const userId = await getAuthorizedTargetUserId(targetUserId);
   const trimmed = name.trim();
   if (!userId || !trimmed) return;

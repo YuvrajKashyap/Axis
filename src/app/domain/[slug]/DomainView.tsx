@@ -3,7 +3,22 @@
 import { useEffect, useState, useTransition, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createCommitment, clearCommitments, updateDomainColor, updateDomainStatus, deleteDomain, updateDomainName, updateDomainFields } from "./actions";
+import {
+  createCommitment,
+  clearCommitments,
+  deleteDomain,
+  loadAllCommitments,
+  recordPassiveAlignmentTouch,
+  updateDomainColor,
+  updateDomainFields,
+  updateDomainName,
+  updateDomainStatus,
+} from "./actions";
+import {
+  formatDriftThresholdLabel,
+  getEffectiveDriftThresholdHours,
+  type DomainSettingsSnapshot,
+} from "@/lib/domain-settings";
 import { QUOTES } from "./quotes";
 import "./domain.css";
 
@@ -222,13 +237,25 @@ type DomainViewProps = {
     primaryCost: string | null;
     currentReality: string | null;
   };
+  settings: DomainSettingsSnapshot;
   commitments: Commitment[];
   alignChain?: string[] | null;
   alignIdx?: number;
   demoUser?: string;
 };
 
-export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demoUser }: DomainViewProps) {
+function formatCompactThreshold(hours: number) {
+  return hours % 24 === 0 ? `${hours / 24}d` : `${hours}h`;
+}
+
+export function DomainView({
+  domain,
+  settings,
+  commitments,
+  alignChain,
+  alignIdx = 0,
+  demoUser,
+}: DomainViewProps) {
   const [currentColor, setCurrentColor] = useState(domain.color ?? "#67e8f9");
   const color = currentColor;
   const { r, g, b } = hexToRgb(color);
@@ -236,15 +263,29 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
   const [text, setText] = useState("");
   const [isPending, startTransition] = useTransition();
   const [showHistory, setShowHistory] = useState(false);
+  const [historyItems, setHistoryItems] = useState(commitments);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(domain.status);
   const router = useRouter();
   const [particleDistances] = useState(() =>
     Array.from({ length: 12 }, () => 80 + Math.random() * 60),
   );
+  const commitSectionRef = useRef<HTMLElement | null>(null);
+  const passiveAlignmentRecordedRef = useRef(false);
+  const effectiveDriftThresholdHours = getEffectiveDriftThresholdHours(settings);
+  const usesPassiveAlignment = settings.commitmentRequirement === "PASSIVE_ALIGNMENT";
 
   // Navigation helpers for demo-edit mode
-  const homeUrl = demoUser ? "/?demo=edit" : "/";
+  const buildHomeUrl = useCallback((pulseDomainId?: string) => {
+    const params = new URLSearchParams();
+    if (demoUser) params.set("demo", "edit");
+    if (pulseDomainId) params.set("pulseDomain", pulseDomainId);
+    const qs = params.toString();
+    return qs ? `/?${qs}` : "/";
+  }, [demoUser]);
+  const homeUrl = buildHomeUrl();
   const domainLink = useCallback((slug: string, extra?: string) => {
     const params = new URLSearchParams();
     if (demoUser) params.set("demoUser", demoUser);
@@ -256,6 +297,19 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
     const qs = params.toString();
     return qs ? `/domain/${slug}?${qs}` : `/domain/${slug}`;
   }, [demoUser]);
+  const alignQuery = alignChain
+    ? `align=${encodeURIComponent(alignChain.join(","))}&idx=${alignIdx}`
+    : undefined;
+  const settingsHref = (() => {
+    const params = new URLSearchParams();
+    if (demoUser) params.set("demoUser", demoUser);
+    if (alignChain) {
+      params.set("align", alignChain.join(","));
+      params.set("idx", String(alignIdx));
+    }
+    const qs = params.toString();
+    return qs ? `/domain/${domain.slug}/settings?${qs}` : `/domain/${domain.slug}/settings`;
+  })();
 
   // Editing state
   const [editing, setEditing] = useState(false);
@@ -301,7 +355,35 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
     return () => clearTimeout(t);
   }, []);
 
-  const navigateAfterQuote = useCallback(() => {
+  useEffect(() => {
+    passiveAlignmentRecordedRef.current = false;
+
+    if (settings.commitmentRequirement !== "PASSIVE_ALIGNMENT") return;
+
+    const commitSection = commitSectionRef.current;
+    const scrollRoot = document.querySelector(".domain-snap-container");
+    if (!commitSection || !(scrollRoot instanceof HTMLElement)) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting || entry.intersectionRatio < 0.6) return;
+        if (passiveAlignmentRecordedRef.current) return;
+
+        passiveAlignmentRecordedRef.current = true;
+        void recordPassiveAlignmentTouch(domain.id, demoUser);
+      },
+      {
+        root: scrollRoot,
+        threshold: [0.6],
+      },
+    );
+
+    observer.observe(commitSection);
+    return () => observer.disconnect();
+  }, [demoUser, domain.id, settings.commitmentRequirement]);
+
+  const navigateAfterCommit = useCallback(() => {
     if (isAligning && !isLastInChain && alignChain) {
       // Go to next domain in align chain
       const nextIdx = alignIdx + 1;
@@ -309,9 +391,21 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
       const slugs = alignChain.join(",");
       router.push(domainLink(nextSlug, `align=${encodeURIComponent(slugs)}&idx=${nextIdx}`));
     } else {
-      // Last in chain or standalone — go home
-      router.push(homeUrl);
+      // Last in chain or standalone — go home and spotlight the recommitted planet
+      router.push(buildHomeUrl(domain.id));
     }
+  }, [alignChain, alignIdx, buildHomeUrl, domain.id, domainLink, isAligning, isLastInChain, router]);
+
+  const navigateWithoutCommitPulse = useCallback(() => {
+    if (isAligning && !isLastInChain && alignChain) {
+      const nextIdx = alignIdx + 1;
+      const nextSlug = alignChain[nextIdx];
+      const slugs = alignChain.join(",");
+      router.push(domainLink(nextSlug, `align=${encodeURIComponent(slugs)}&idx=${nextIdx}`));
+      return;
+    }
+
+    router.push(homeUrl);
   }, [alignChain, alignIdx, domainLink, homeUrl, isAligning, isLastInChain, router]);
 
   const handleCommit = useCallback(() => {
@@ -330,27 +424,46 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
         setTimeout(() => {
           setQuotePhase("gone");
           setQuoteOverlay(false);
-          navigateAfterQuote();
+          navigateAfterCommit();
         }, 6200);
       }
     });
-  }, [text, demoUser, domain.id, startTransition, navigateAfterQuote]);
+  }, [text, demoUser, domain.id, startTransition, navigateAfterCommit]);
 
   const handleSkip = useCallback(() => {
     if (isAligning) {
-      navigateAfterQuote();
+      navigateWithoutCommitPulse();
     }
-  }, [isAligning, navigateAfterQuote]);
+  }, [isAligning, navigateWithoutCommitPulse]);
 
   const handleClear = useCallback(() => {
     setClearing(true);
     startTransition(async () => {
       await clearCommitments(domain.id, demoUser);
       setShowHistory(false);
+      setHistoryItems([]);
+      setHistoryLoaded(true);
       setClearing(false);
       router.refresh();
     });
   }, [demoUser, domain.id, router, startTransition]);
+
+  const toggleHistory = useCallback(() => {
+    const nextOpen = !showHistory;
+    setShowHistory(nextOpen);
+
+    if (nextOpen && !historyLoaded && !historyLoading) {
+      setHistoryLoading(true);
+      void loadAllCommitments(domain.id, demoUser)
+        .then((allCommitments) => {
+          setHistoryItems(allCommitments);
+          setHistoryLoaded(true);
+        })
+        .finally(() => {
+          setHistoryLoading(false);
+        });
+    }
+  }, [demoUser, domain.id, historyLoaded, historyLoading, showHistory]);
 
   const handleSaveEdits = useCallback(() => {
     startSaveTransition(async () => {
@@ -371,12 +484,12 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
       // If name changed, slug changed — need to redirect
       if (editName.trim() && editName.trim() !== domain.name) {
         const newSlug = editName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-        router.push(domainLink(newSlug));
+        router.push(domainLink(newSlug, alignQuery));
       } else {
         router.refresh();
       }
     });
-  }, [demoUser, domain, domainLink, editCost, editIdentity, editName, editReason, editVision, router, startSaveTransition]);
+  }, [alignQuery, demoUser, domain, domainLink, editCost, editIdentity, editName, editReason, editVision, router, startSaveTransition]);
 
   const handleDelete = useCallback(() => {
     startDeleteTransition(async () => {
@@ -552,6 +665,18 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
                 >
                   Edit
                 </button>
+              )}
+              {editing ? (
+                <span className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-900/70">
+                  Settings
+                </span>
+              ) : (
+                <Link
+                  href={settingsHref}
+                  className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-800 hover:text-zinc-500 transition-colors"
+                >
+                  Settings
+                </Link>
               )}
               <p
                 className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase"
@@ -795,7 +920,10 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
         </section>
 
         {/* Section 4: Commitment */}
-        <section className="domain-snap-section min-h-screen flex w-full items-center justify-center px-5 sm:px-6 relative z-10">
+        <section
+          ref={commitSectionRef}
+          className="domain-snap-section min-h-screen flex w-full items-center justify-center px-5 sm:px-6 relative z-10"
+        >
           {/* Drift warning — side note on desktop, bottom note on mobile */}
           <div className="hidden lg:flex absolute right-[8%] xl:right-[10%] top-1/2 -translate-y-1/2 items-start gap-4 max-w-[280px]">
             <div
@@ -807,13 +935,21 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
             />
             <div>
               <p className="text-[11px] font-mono tracking-[0.25em] uppercase text-zinc-600 leading-relaxed">
-                72 hours without a commitment
+                {effectiveDriftThresholdHours === null
+                  ? "Auto-drift is deactivated"
+                  : `${formatDriftThresholdLabel(effectiveDriftThresholdHours)} without ${
+                      usesPassiveAlignment ? "an alignment touch" : "a commitment"
+                    }`}
               </p>
               <p
                 className="text-sm mt-2 tracking-wide text-zinc-700 italic leading-relaxed"
                 style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
               >
-                and this planet drifts out of orbit.
+                {effectiveDriftThresholdHours === null
+                  ? "This planet only drifts if you move it there yourself."
+                  : usesPassiveAlignment
+                    ? "Reaching Commit or saving a commitment refreshes this planet."
+                    : "and this planet drifts out of orbit."}
               </p>
             </div>
           </div>
@@ -862,13 +998,19 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
             </div>
 
             {/* Past commitments */}
-            {commitments.length > 0 && (
+            {historyItems.length > 0 && (
               <div className="mt-16">
                 <button
-                  onClick={() => setShowHistory(!showHistory)}
+                  onClick={toggleHistory}
                   className="text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-800 transition-colors hover:text-zinc-600"
                 >
-                  {showHistory ? "Hide history" : `${commitments.length} past commitment${commitments.length !== 1 ? "s" : ""}`}
+                  {showHistory
+                    ? "Hide history"
+                    : historyLoading
+                      ? "Loading history..."
+                      : historyLoaded
+                        ? `${historyItems.length} past commitment${historyItems.length !== 1 ? "s" : ""}`
+                        : "Show past commitments"}
                 </button>
 
                 <div
@@ -879,7 +1021,7 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
                   }}
                 >
                   <div className="mt-6 space-y-3 max-h-[280px] overflow-y-auto">
-                    {commitments.map((commitment: Commitment) => (
+                    {historyItems.map((commitment: Commitment) => (
                       <div key={commitment.id} className="text-left py-2">
                         <p className="text-[12px] text-zinc-500 leading-relaxed">
                           {commitment.text}
@@ -909,12 +1051,18 @@ export function DomainView({ domain, commitments, alignChain, alignIdx = 0, demo
                 style={{ background: `linear-gradient(to right, transparent, rgba(${r},${g},${b},0.15))` }}
               />
               <p className="text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-700">
-                72h no commit
+                {effectiveDriftThresholdHours === null
+                  ? "drift deactivated"
+                  : `${formatCompactThreshold(effectiveDriftThresholdHours)} no ${
+                      usesPassiveAlignment ? "alignment touch" : "commit"
+                    }`}
                 <span
                   className="italic tracking-wide ml-1"
                   style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
                 >
-                  — planet drifts
+                  {effectiveDriftThresholdHours === null
+                    ? "— stays in orbit"
+                    : "— planet drifts"}
                 </span>
               </p>
               <div
