@@ -103,9 +103,9 @@ export function getOrbitSpeedMultiplier(speed: DomainOrbitSpeedValue): number {
     case "STILL":
       return 0;
     case "SLOW":
-      return 0.7;
+      return 0.5;
     case "FAST":
-      return 1.35;
+      return 3;
     case "STANDARD":
     default:
       return 1;
