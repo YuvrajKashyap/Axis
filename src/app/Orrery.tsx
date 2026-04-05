@@ -183,7 +183,7 @@ function buildGlow(hex: string, status: EffectiveStatus) {
       ? `0 0 10px rgba(${r},${g},${b},0.8), 0 0 24px rgba(${r},${g},${b},0.4), 0 0 50px rgba(${r},${g},${b},0.15)`
       : `0 0 8px rgba(${r},${g},${b},0.9), 0 0 22px rgba(${r},${g},${b},0.5), 0 0 50px rgba(${r},${g},${b},0.15)`,
     glowSoft: `0 0 6px rgba(${r},${g},${b},0.4)`,
-    ringColor: `rgba(${r},${g},${b},${isDrifting ? 0.06 : 0.10})`,
+    ringColor: `rgba(${r},${g},${b},${isDrifting ? 0.036 : 0.06})`,
     label: isDrifting ? "Drifting" : "Active",
   };
 }
