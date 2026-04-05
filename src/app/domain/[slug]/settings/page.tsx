@@ -56,6 +56,7 @@ export default async function DomainSettingsPage({
   const backHref = backParams.toString()
     ? `/domain/${domain.slug}?${backParams.toString()}`
     : `/domain/${domain.slug}`;
+  const homeHref = demoUser ? "/?demo=edit" : "/";
 
   return (
     <DomainSettingsView
@@ -75,6 +76,7 @@ export default async function DomainSettingsPage({
         orbitEccentricity: domain.orbitEccentricity,
       })}
       backHref={backHref}
+      homeHref={homeHref}
       targetUserId={demoUser}
     />
   );

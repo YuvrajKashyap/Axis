@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  DEFAULT_DOMAIN_SETTINGS,
   DEFAULT_DRIFT_THRESHOLD_HOURS,
   DRIFT_PRESET_HOURS,
   formatDriftThresholdLabel,
@@ -29,6 +30,7 @@ type DomainSettingsViewProps = {
   };
   settings: DomainSettingsSnapshot;
   backHref: string;
+  homeHref: string;
   targetUserId?: string;
 };
 
@@ -101,6 +103,7 @@ export function DomainSettingsView({
   domain,
   settings,
   backHref,
+  homeHref,
   targetUserId,
 }: DomainSettingsViewProps) {
   const router = useRouter();
@@ -109,6 +112,10 @@ export function DomainSettingsView({
   const [saveError, setSaveError] = useState("");
 
   const initialSettings = useMemo(() => normalizeDomainSettings(settings), [settings]);
+  const defaultSettings = useMemo(
+    () => normalizeDomainSettings(DEFAULT_DOMAIN_SETTINGS),
+    [],
+  );
   const [driftSelect, setDriftSelect] = useState<DriftSelectValue>(
     driftSelectFromSettings(initialSettings),
   );
@@ -191,15 +198,24 @@ export function DomainSettingsView({
       <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8 md:px-12 md:py-10">
         <div className="mb-10 flex items-start justify-between gap-6">
           <div className="space-y-4">
+            <div className="flex items-start gap-5">
+            <Link
+              href={homeHref}
+              className="-translate-y-0.5 inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-700 transition-colors hover:text-zinc-300"
+            >
+              <span aria-hidden>←</span>
+              Axis
+            </Link>
             <Link
               href={backHref}
-              className="inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-700 transition-colors hover:text-zinc-300"
+              className="mt-1 inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-700 transition-colors hover:text-zinc-300"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
                 <path d="M7.5 2.5 4 6l3.5 3.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               Back
             </Link>
+            </div>
             <div>
               <p className="text-[10px] font-mono uppercase tracking-[0.42em] text-zinc-600">
                 Planet Settings
@@ -244,15 +260,50 @@ export function DomainSettingsView({
             >
               {isPending ? "Saving..." : "Save changes"}
             </button>
-            <p className="text-[9px] font-mono uppercase tracking-[0.22em] text-zinc-700">
-              {saveState === "saved"
-                ? "saved"
-                : saveState === "error"
-                  ? saveError || "save failed"
-                  : isDirty
-                    ? "unsaved changes"
-                    : "defaults preserved"}
-            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSaveState("idle");
+                setSaveError("");
+                setDriftSelect(driftSelectFromSettings(defaultSettings));
+                setCustomUnit(customUnitFromHours(defaultSettings.driftThresholdHours));
+                setCustomValue(customValueFromHours(defaultSettings.driftThresholdHours));
+                setCommitmentRequirement(defaultSettings.commitmentRequirement);
+                setOrbitSpeed(defaultSettings.orbitSpeed);
+                setOrbitEccentricity(defaultSettings.orbitEccentricity);
+                setVisualIntensity(defaultSettings.visualIntensity);
+                setPlanetSizeScale(defaultSettings.planetSizeScale);
+                startTransition(async () => {
+                  const result = await saveDomainSettings(
+                    domain.id,
+                    defaultSettings,
+                    targetUserId,
+                  );
+
+                  if (!result.success) {
+                    setSaveState("error");
+                    setSaveError(result.error);
+                    return;
+                  }
+
+                  setSaveState("saved");
+                  router.refresh();
+                });
+              }}
+              disabled={isPending}
+              className="text-[9px] font-mono uppercase tracking-[0.28em] text-zinc-700 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              Restore to defaults
+            </button>
+            {(saveState !== "idle" || isDirty) && (
+              <p className="text-[9px] font-mono uppercase tracking-[0.22em] text-zinc-700">
+                {saveState === "saved"
+                  ? "saved"
+                  : saveState === "error"
+                    ? saveError || "save failed"
+                    : "unsaved changes"}
+              </p>
+            )}
           </div>
         </div>
 
