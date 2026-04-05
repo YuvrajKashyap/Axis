@@ -117,9 +117,9 @@ export function getVisualIntensityMultiplier(
 ): number {
   switch (intensity) {
     case "SUBTLE":
-      return 0.72;
+      return 0.22;
     case "INTENSE":
-      return 1.38;
+      return 2.75;
     case "BALANCED":
     default:
       return 1;
