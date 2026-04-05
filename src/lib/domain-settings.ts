@@ -131,9 +131,9 @@ export function getOrbitEccentricityRatio(
 ): number {
   switch (eccentricity) {
     case "SLIGHTLY_ELLIPTICAL":
-      return 0.86;
-    case "VERY_ELLIPTICAL":
       return 0.68;
+    case "VERY_ELLIPTICAL":
+      return 0.32;
     case "DEFAULT":
     default:
       return 1;
