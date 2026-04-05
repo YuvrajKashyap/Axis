@@ -16,7 +16,7 @@ import {
   type DomainVisualIntensityValue,
 } from "@/lib/domain-settings";
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { saveDomainSettings } from "./actions";
 import { useRouter } from "next/navigation";
 import "./settings.css";
@@ -116,6 +116,7 @@ export function DomainSettingsView({
     () => normalizeDomainSettings(DEFAULT_DOMAIN_SETTINGS),
     [],
   );
+  const [savedSettings, setSavedSettings] = useState(initialSettings);
   const [driftSelect, setDriftSelect] = useState<DriftSelectValue>(
     driftSelectFromSettings(initialSettings),
   );
@@ -139,6 +140,19 @@ export function DomainSettingsView({
   const [planetSizeScale, setPlanetSizeScale] = useState(
     initialSettings.planetSizeScale,
   );
+
+  const applySettings = (nextSettings: DomainSettingsSnapshot) => {
+    setSaveState("idle");
+    setSaveError("");
+    setDriftSelect(driftSelectFromSettings(nextSettings));
+    setCustomUnit(customUnitFromHours(nextSettings.driftThresholdHours));
+    setCustomValue(customValueFromHours(nextSettings.driftThresholdHours));
+    setCommitmentRequirement(nextSettings.commitmentRequirement);
+    setOrbitSpeed(nextSettings.orbitSpeed);
+    setOrbitEccentricity(nextSettings.orbitEccentricity);
+    setVisualIntensity(nextSettings.visualIntensity);
+    setPlanetSizeScale(nextSettings.planetSizeScale);
+  };
 
   const color = domain.color ?? "#67e8f9";
 
@@ -182,7 +196,43 @@ export function DomainSettingsView({
   ]);
 
   const isDirty =
-    JSON.stringify(draftSettings) !== JSON.stringify(initialSettings);
+    JSON.stringify(draftSettings) !== JSON.stringify(savedSettings);
+
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const settingsToSave = draftSettings;
+    const timeoutId = window.setTimeout(() => {
+      startTransition(async () => {
+        const result = await saveDomainSettings(
+          domain.id,
+          settingsToSave,
+          targetUserId,
+        );
+
+        if (!result.success) {
+          setSaveState("error");
+          setSaveError(result.error);
+          return;
+        }
+
+        setSavedSettings(settingsToSave);
+        setSaveState("saved");
+        router.refresh();
+      });
+    }, 420);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [domain.id, draftSettings, isDirty, router, startTransition, targetUserId]);
+
+  const statusLabel =
+    saveState === "error"
+      ? saveError || "save failed"
+      : isPending || isDirty
+        ? "saving..."
+        : saveState === "saved"
+          ? "saved"
+          : "";
 
   const previewGlow = getVisualIntensityMultiplier(visualIntensity);
   const previewPlanetSize = getPreviewPlanetSize(planetSizeScale);
@@ -197,25 +247,23 @@ export function DomainSettingsView({
     <main className="min-h-screen bg-black text-white">
       <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8 md:px-12 md:py-10">
         <div className="mb-10 flex items-start justify-between gap-6">
-          <div className="space-y-4">
-            <div className="flex items-start gap-5">
+          <div className="relative space-y-4">
             <Link
               href={homeHref}
-              className="-translate-y-0.5 inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-700 transition-colors hover:text-zinc-300"
+              className="fixed top-5 left-4 z-30 inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-700 transition-colors hover:text-zinc-300 sm:left-5 md:top-7 md:left-7"
             >
               <span aria-hidden>←</span>
               Axis
             </Link>
             <Link
               href={backHref}
-              className="mt-1 inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-700 transition-colors hover:text-zinc-300"
+              className="inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-700 transition-colors hover:text-zinc-300"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
                 <path d="M7.5 2.5 4 6l3.5 3.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               Back
             </Link>
-            </div>
             <div>
               <p className="text-[10px] font-mono uppercase tracking-[0.42em] text-zinc-600">
                 Planet Settings
@@ -236,74 +284,18 @@ export function DomainSettingsView({
             <button
               type="button"
               onClick={() => {
-                setSaveState("idle");
-                setSaveError("");
-                startTransition(async () => {
-                  const result = await saveDomainSettings(
-                    domain.id,
-                    draftSettings,
-                    targetUserId,
-                  );
-
-                  if (!result.success) {
-                    setSaveState("error");
-                    setSaveError(result.error);
-                    return;
-                  }
-
-                  setSaveState("saved");
-                  router.refresh();
-                });
+                applySettings(defaultSettings);
               }}
-              disabled={isPending || !isDirty}
-              className="rounded-full border border-white/10 px-5 py-2 text-[10px] font-mono uppercase tracking-[0.32em] text-zinc-200 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-            >
-              {isPending ? "Saving..." : "Save changes"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSaveState("idle");
-                setSaveError("");
-                setDriftSelect(driftSelectFromSettings(defaultSettings));
-                setCustomUnit(customUnitFromHours(defaultSettings.driftThresholdHours));
-                setCustomValue(customValueFromHours(defaultSettings.driftThresholdHours));
-                setCommitmentRequirement(defaultSettings.commitmentRequirement);
-                setOrbitSpeed(defaultSettings.orbitSpeed);
-                setOrbitEccentricity(defaultSettings.orbitEccentricity);
-                setVisualIntensity(defaultSettings.visualIntensity);
-                setPlanetSizeScale(defaultSettings.planetSizeScale);
-                startTransition(async () => {
-                  const result = await saveDomainSettings(
-                    domain.id,
-                    defaultSettings,
-                    targetUserId,
-                  );
-
-                  if (!result.success) {
-                    setSaveState("error");
-                    setSaveError(result.error);
-                    return;
-                  }
-
-                  setSaveState("saved");
-                  router.refresh();
-                });
-              }}
-              disabled={isPending}
-              className="text-[9px] font-mono uppercase tracking-[0.28em] text-zinc-700 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-35"
+              disabled={isPending && !isDirty}
+              className="inline-flex items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.03] px-4 py-2 text-[9px] font-mono uppercase tracking-[0.28em] text-zinc-300 transition-colors hover:border-white/18 hover:bg-white/[0.05] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-35"
             >
               Restore to defaults
             </button>
-            {(saveState !== "idle" || isDirty) && (
+            {statusLabel ? (
               <p className="text-[9px] font-mono uppercase tracking-[0.22em] text-zinc-700">
-                {saveState === "saved"
-                  ? "saved"
-                  : saveState === "error"
-                    ? saveError || "save failed"
-                    : "unsaved changes"}
+                {statusLabel}
               </p>
-            )}
+            ) : null}
           </div>
         </div>
 
