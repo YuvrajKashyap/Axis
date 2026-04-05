@@ -85,6 +85,86 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
   };
 }
 
+function rgbToHsl(r: number, g: number, b: number) {
+  const rr = r / 255;
+  const gg = g / 255;
+  const bb = b / 255;
+  const max = Math.max(rr, gg, bb);
+  const min = Math.min(rr, gg, bb);
+  const l = (max + min) / 2;
+
+  if (max === min) {
+    return { h: 0, s: 0, l };
+  }
+
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+
+  switch (max) {
+    case rr:
+      h = (gg - bb) / d + (gg < bb ? 6 : 0);
+      break;
+    case gg:
+      h = (bb - rr) / d + 2;
+      break;
+    default:
+      h = (rr - gg) / d + 4;
+      break;
+  }
+
+  h /= 6;
+  return { h, s, l };
+}
+
+function hueToRgb(p: number, q: number, t: number) {
+  let next = t;
+  if (next < 0) next += 1;
+  if (next > 1) next -= 1;
+  if (next < 1 / 6) return p + (q - p) * 6 * next;
+  if (next < 1 / 2) return q;
+  if (next < 2 / 3) return p + (q - p) * (2 / 3 - next) * 6;
+  return p;
+}
+
+function hslToHex(h: number, s: number, l: number) {
+  if (s === 0) {
+    const value = Math.round(l * 255)
+      .toString(16)
+      .padStart(2, "0");
+    return `#${value}${value}${value}`;
+  }
+
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const r = hueToRgb(p, q, h + 1 / 3);
+  const g = hueToRgb(p, q, h);
+  const b = hueToRgb(p, q, h - 1 / 3);
+
+  return `#${[r, g, b]
+    .map((channel) =>
+      Math.round(channel * 255)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+}
+
+function tuneHexColor(
+  hex: string,
+  saturationMultiplier: number,
+  lightnessMultiplier: number,
+  lightnessOffset: number = 0,
+) {
+  const { r, g, b } = hexToRgb(hex);
+  const hsl = rgbToHsl(r, g, b);
+  return hslToHex(
+    hsl.h,
+    Math.max(0, Math.min(1, hsl.s * saturationMultiplier)),
+    Math.max(0, Math.min(1, hsl.l * lightnessMultiplier + lightnessOffset)),
+  );
+}
+
 function buildGlow(hex: string, status: EffectiveStatus) {
   const { r, g, b } = hexToRgb(hex);
   if (status === "ARCHIVED") {
@@ -121,18 +201,51 @@ function buildGlowWithIntensity(
   status: EffectiveStatus,
   intensityMultiplier: number,
 ) {
+  const baseCfg = buildGlow(hex, status);
   if (intensityMultiplier === 1) {
-    return buildGlow(hex, status);
+    return baseCfg;
   }
 
-  const { r, g, b } = hexToRgb(hex);
+  const isSubtle = intensityMultiplier < 1;
+  const isIntense = intensityMultiplier > 1;
+  const saturationMultiplier = isSubtle
+    ? 0.08
+    : isIntense
+      ? 4.6
+      : 1;
+  const lightnessMultiplier = isSubtle
+    ? 0.84
+    : isIntense
+      ? 1.08
+      : 1;
+  const lightnessOffset = isIntense ? 0.03 : 0;
+  const tunedColor = tuneHexColor(
+    hex,
+    saturationMultiplier,
+    lightnessMultiplier,
+    lightnessOffset,
+  );
+  const { r, g, b } = hexToRgb(tunedColor);
+  const spreadScale = isSubtle ? 0.18 : isIntense ? 4.3 : 1;
+  const alphaScale = isSubtle ? 0.1 : isIntense ? 3.8 : 1;
+
   if (status === "ARCHIVED") {
+    if (isIntense) {
+      return {
+        color: tunedColor,
+        glow: `0 0 6px ${rgba(r, g, b, 0.94)}, 0 0 12px ${rgba(r, g, b, 0.72)}, 0 0 20px ${rgba(r, g, b, 0.38)}`,
+        glowSoft: `0 0 8px ${rgba(r, g, b, 0.34)}`,
+        ringColor: baseCfg.ringColor,
+        label: baseCfg.label,
+      };
+    }
+
     return {
-      color: hex,
-      glow: `0 0 4px ${rgba(r, g, b, 0.3 * intensityMultiplier)}, 0 0 10px ${rgba(r, g, b, 0.1 * intensityMultiplier)}`,
-      glowSoft: `0 0 3px ${rgba(r, g, b, 0.2 * intensityMultiplier)}`,
-      ringColor: rgba(r, g, b, 0.03 * intensityMultiplier),
-      label: "Archived",
+      color: tunedColor,
+      glow: `0 0 ${4 * spreadScale}px ${rgba(r, g, b, 0.3 * alphaScale)}, 0 0 ${10 * spreadScale}px ${rgba(r, g, b, 0.1 * alphaScale)}`,
+      glowSoft: `0 0 ${3 * spreadScale}px ${rgba(r, g, b, 0.2 * alphaScale)}`,
+      ringColor: baseCfg.ringColor,
+      label: baseCfg.label,
     };
   }
 
@@ -140,13 +253,28 @@ function buildGlowWithIntensity(
   const primaryAlpha = isDrifting ? 0.8 : 0.9;
   const secondaryAlpha = isDrifting ? 0.4 : 0.5;
   const tertiaryAlpha = 0.15;
+  const extraBloom = isIntense
+    ? `, 0 0 ${210 * spreadScale}px ${rgba(r, g, b, 0.28 * alphaScale)}, 0 0 ${330 * spreadScale}px ${rgba(r, g, b, 0.14 * alphaScale)}`
+    : "";
+
+  if (isIntense) {
+    return {
+      color: tunedColor,
+      glow: isDrifting
+        ? `0 0 10px ${rgba(r, g, b, 1)}, 0 0 16px ${rgba(r, g, b, 0.94)}, 0 0 28px ${rgba(r, g, b, 0.82)}, 0 0 46px ${rgba(r, g, b, 0.5)}, 0 0 72px ${rgba(r, g, b, 0.22)}`
+        : `0 0 9px ${rgba(r, g, b, 1)}, 0 0 14px ${rgba(r, g, b, 0.98)}, 0 0 24px ${rgba(r, g, b, 0.9)}, 0 0 40px ${rgba(r, g, b, 0.58)}, 0 0 66px ${rgba(r, g, b, 0.24)}`,
+      glowSoft: `0 0 10px ${rgba(r, g, b, 0.54)}, 0 0 18px ${rgba(r, g, b, 0.22)}`,
+      ringColor: baseCfg.ringColor,
+      label: baseCfg.label,
+    };
+  }
 
   return {
-    color: hex,
-    glow: `0 0 8px ${rgba(r, g, b, primaryAlpha * intensityMultiplier)}, 0 0 22px ${rgba(r, g, b, secondaryAlpha * intensityMultiplier)}, 0 0 50px ${rgba(r, g, b, tertiaryAlpha * intensityMultiplier)}`,
-    glowSoft: `0 0 6px ${rgba(r, g, b, 0.4 * intensityMultiplier)}`,
-    ringColor: rgba(r, g, b, (isDrifting ? 0.06 : 0.10) * intensityMultiplier),
-    label: isDrifting ? "Drifting" : "Active",
+    color: tunedColor,
+    glow: `0 0 ${8 * spreadScale}px ${rgba(r, g, b, primaryAlpha * alphaScale)}, 0 0 ${22 * spreadScale}px ${rgba(r, g, b, secondaryAlpha * alphaScale)}, 0 0 ${50 * spreadScale}px ${rgba(r, g, b, tertiaryAlpha * alphaScale)}${extraBloom}`,
+    glowSoft: `0 0 ${6 * spreadScale}px ${rgba(r, g, b, 0.4 * alphaScale)}`,
+    ringColor: baseCfg.ringColor,
+    label: baseCfg.label,
   };
 }
 
