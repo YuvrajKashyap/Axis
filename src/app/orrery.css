@@ -77,6 +77,48 @@
   50%      { opacity: 0.5; }
 }
 
+@keyframes orrery-return-planet-pulse {
+  0%, 100% { transform: scale(1); }
+  8% { transform: scale(1.28); }
+  15% { transform: scale(1.04); }
+  33% { transform: scale(1); }
+  41% { transform: scale(1.24); }
+  48% { transform: scale(1.03); }
+  66% { transform: scale(1); }
+  74% { transform: scale(1.2); }
+  81% { transform: scale(1.02); }
+}
+
+@keyframes orrery-return-halo-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.72; }
+  8% { transform: scale(1.48); opacity: 1; }
+  15% { transform: scale(1.16); opacity: 0.82; }
+  33% { transform: scale(1); opacity: 0.72; }
+  41% { transform: scale(1.42); opacity: 0.96; }
+  48% { transform: scale(1.14); opacity: 0.8; }
+  66% { transform: scale(1); opacity: 0.72; }
+  74% { transform: scale(1.36); opacity: 0.92; }
+  81% { transform: scale(1.1); opacity: 0.78; }
+}
+
+@keyframes orrery-return-ring-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  9% { transform: scale(1.022); opacity: 1; }
+  16% { transform: scale(1.008); opacity: 0.94; }
+  34% { transform: scale(1); opacity: 1; }
+  43% { transform: scale(1.018); opacity: 1; }
+  50% { transform: scale(1.006); opacity: 0.95; }
+  68% { transform: scale(1); opacity: 1; }
+  77% { transform: scale(1.014); opacity: 1; }
+  84% { transform: scale(1.004); opacity: 0.96; }
+}
+
+@keyframes orrery-return-label-pulse {
+  0%, 100% { opacity: 1; }
+  8%, 41%, 74% { opacity: 1; }
+  15%, 48%, 81% { opacity: 0.94; }
+}
+
 .archive-drift {
   animation: archive-fade 4s ease-in-out infinite;
 }
