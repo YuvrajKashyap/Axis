@@ -1069,9 +1069,11 @@ export function Orrery({
               </p>
               <Link
                 href="/how"
-                className="text-[8px] font-mono tracking-[0.3em] uppercase text-zinc-800 hover:text-zinc-500 active:text-zinc-500 transition-colors duration-500 border-b border-dashed border-zinc-800/40 hover:border-zinc-500/40 pb-px"
+                className="group inline-flex items-center gap-2 text-[8px] font-mono tracking-[0.32em] uppercase text-zinc-500 hover:text-zinc-200 active:text-zinc-200 transition-colors duration-500 border-b border-dashed border-zinc-500/55 hover:border-zinc-200/55 pb-px"
               >
-                How does this work?
+                <span aria-hidden className="h-1 w-1 rounded-full bg-zinc-500/80 transition-colors duration-500 group-hover:bg-zinc-200/80" />
+                <span>How does this work?</span>
+                <span aria-hidden className="text-zinc-600 transition-colors duration-500 group-hover:text-zinc-300">↗</span>
               </Link>
             </div>
           </div>
