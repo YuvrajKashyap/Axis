@@ -18,7 +18,6 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { saveDomainSettings } from "./actions";
-import { useRouter } from "next/navigation";
 import "./settings.css";
 
 type DomainSettingsViewProps = {
@@ -106,7 +105,6 @@ export function DomainSettingsView({
   homeHref,
   targetUserId,
 }: DomainSettingsViewProps) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [saveState, setSaveState] = useState<"idle" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState("");
@@ -117,6 +115,7 @@ export function DomainSettingsView({
     [],
   );
   const [savedSettings, setSavedSettings] = useState(initialSettings);
+  const [autosaveRevision, setAutosaveRevision] = useState(0);
   const [driftSelect, setDriftSelect] = useState<DriftSelectValue>(
     driftSelectFromSettings(initialSettings),
   );
@@ -152,6 +151,12 @@ export function DomainSettingsView({
     setOrbitEccentricity(nextSettings.orbitEccentricity);
     setVisualIntensity(nextSettings.visualIntensity);
     setPlanetSizeScale(nextSettings.planetSizeScale);
+  };
+
+  const queueAutosave = () => {
+    setSaveState("idle");
+    setSaveError("");
+    setAutosaveRevision((value) => value + 1);
   };
 
   const color = domain.color ?? "#67e8f9";
@@ -199,7 +204,7 @@ export function DomainSettingsView({
     JSON.stringify(draftSettings) !== JSON.stringify(savedSettings);
 
   useEffect(() => {
-    if (!isDirty) return;
+    if (!isDirty || autosaveRevision === 0) return;
 
     const settingsToSave = draftSettings;
     const timeoutId = window.setTimeout(() => {
@@ -218,12 +223,11 @@ export function DomainSettingsView({
 
         setSavedSettings(settingsToSave);
         setSaveState("saved");
-        router.refresh();
       });
     }, 420);
 
     return () => window.clearTimeout(timeoutId);
-  }, [domain.id, draftSettings, isDirty, router, startTransition, targetUserId]);
+  }, [autosaveRevision, domain.id, draftSettings, isDirty, startTransition, targetUserId]);
 
   const statusLabel =
     saveState === "error"
@@ -285,6 +289,7 @@ export function DomainSettingsView({
               type="button"
               onClick={() => {
                 applySettings(defaultSettings);
+                queueAutosave();
               }}
               disabled={isPending && !isDirty}
               className="inline-flex items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.03] px-4 py-2 text-[9px] font-mono uppercase tracking-[0.28em] text-zinc-300 transition-colors hover:border-white/18 hover:bg-white/[0.05] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-35"
@@ -340,7 +345,7 @@ export function DomainSettingsView({
                     onChange={(e) => {
                       const value = e.target.value as DriftSelectValue;
                       setDriftSelect(value);
-                      setSaveState("idle");
+                      queueAutosave();
                     }}
                     className="settings-select w-full rounded-2xl border border-white/[0.08] bg-transparent px-4 py-3 text-sm text-zinc-200 outline-none"
                   >
@@ -364,13 +369,19 @@ export function DomainSettingsView({
                             value="hours"
                             current={customUnit}
                             label="Hours"
-                            onChange={setCustomUnit}
+                            onChange={(value) => {
+                              setCustomUnit(value);
+                              queueAutosave();
+                            }}
                           />
                           <SegmentedOption
                             value="days"
                             current={customUnit}
                             label="Days"
-                            onChange={setCustomUnit}
+                            onChange={(value) => {
+                              setCustomUnit(value);
+                              queueAutosave();
+                            }}
                           />
                         </div>
                       </div>
@@ -380,7 +391,10 @@ export function DomainSettingsView({
                         max={customUnit === "days" ? 7 : 168}
                         step={1}
                         value={customValue}
-                        onChange={(e) => setCustomValue(Number(e.target.value))}
+                        onChange={(e) => {
+                          setCustomValue(Number(e.target.value));
+                          queueAutosave();
+                        }}
                         className="settings-range w-full"
                       />
                       <div className="mt-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.22em] text-zinc-600">
@@ -406,13 +420,19 @@ export function DomainSettingsView({
                       value="STANDARD"
                       current={commitmentRequirement}
                       label="Standard"
-                      onChange={setCommitmentRequirement}
+                      onChange={(value) => {
+                        setCommitmentRequirement(value);
+                        queueAutosave();
+                      }}
                     />
                     <SegmentedOption
                       value="PASSIVE_ALIGNMENT"
                       current={commitmentRequirement}
                       label="Passive Alignment"
-                      onChange={setCommitmentRequirement}
+                      onChange={(value) => {
+                        setCommitmentRequirement(value);
+                        queueAutosave();
+                      }}
                     />
                   </div>
                 </div>
@@ -436,10 +456,22 @@ export function DomainSettingsView({
                     Standard equals the current Axis motion. Other options layer on top of that base behavior.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <SegmentedOption value="STILL" current={orbitSpeed} label="Still" onChange={setOrbitSpeed} />
-                    <SegmentedOption value="SLOW" current={orbitSpeed} label="Slow" onChange={setOrbitSpeed} />
-                    <SegmentedOption value="STANDARD" current={orbitSpeed} label="Standard" onChange={setOrbitSpeed} />
-                    <SegmentedOption value="FAST" current={orbitSpeed} label="Fast" onChange={setOrbitSpeed} />
+                    <SegmentedOption value="STILL" current={orbitSpeed} label="Still" onChange={(value) => {
+                      setOrbitSpeed(value);
+                      queueAutosave();
+                    }} />
+                    <SegmentedOption value="SLOW" current={orbitSpeed} label="Slow" onChange={(value) => {
+                      setOrbitSpeed(value);
+                      queueAutosave();
+                    }} />
+                    <SegmentedOption value="STANDARD" current={orbitSpeed} label="Standard" onChange={(value) => {
+                      setOrbitSpeed(value);
+                      queueAutosave();
+                    }} />
+                    <SegmentedOption value="FAST" current={orbitSpeed} label="Fast" onChange={(value) => {
+                      setOrbitSpeed(value);
+                      queueAutosave();
+                    }} />
                   </div>
                 </div>
 
@@ -453,19 +485,28 @@ export function DomainSettingsView({
                       value="DEFAULT"
                       current={orbitEccentricity}
                       label="Default"
-                      onChange={setOrbitEccentricity}
+                      onChange={(value) => {
+                        setOrbitEccentricity(value);
+                        queueAutosave();
+                      }}
                     />
                     <SegmentedOption
                       value="SLIGHTLY_ELLIPTICAL"
                       current={orbitEccentricity}
                       label="Slightly Elliptical"
-                      onChange={setOrbitEccentricity}
+                      onChange={(value) => {
+                        setOrbitEccentricity(value);
+                        queueAutosave();
+                      }}
                     />
                     <SegmentedOption
                       value="VERY_ELLIPTICAL"
                       current={orbitEccentricity}
                       label="Very Elliptical"
-                      onChange={setOrbitEccentricity}
+                      onChange={(value) => {
+                        setOrbitEccentricity(value);
+                        queueAutosave();
+                      }}
                     />
                   </div>
                 </div>
@@ -489,9 +530,18 @@ export function DomainSettingsView({
                     Balanced matches the current live planet look exactly.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <SegmentedOption value="SUBTLE" current={visualIntensity} label="Subtle" onChange={setVisualIntensity} />
-                    <SegmentedOption value="BALANCED" current={visualIntensity} label="Balanced" onChange={setVisualIntensity} />
-                    <SegmentedOption value="INTENSE" current={visualIntensity} label="Intense" onChange={setVisualIntensity} />
+                    <SegmentedOption value="SUBTLE" current={visualIntensity} label="Subtle" onChange={(value) => {
+                      setVisualIntensity(value);
+                      queueAutosave();
+                    }} />
+                    <SegmentedOption value="BALANCED" current={visualIntensity} label="Balanced" onChange={(value) => {
+                      setVisualIntensity(value);
+                      queueAutosave();
+                    }} />
+                    <SegmentedOption value="INTENSE" current={visualIntensity} label="Intense" onChange={(value) => {
+                      setVisualIntensity(value);
+                      queueAutosave();
+                    }} />
                   </div>
                 </div>
 
@@ -514,7 +564,10 @@ export function DomainSettingsView({
                       max={170}
                       step={1}
                       value={Math.round(planetSizeScale * 100)}
-                      onChange={(e) => setPlanetSizeScale(Number(e.target.value) / 100)}
+                      onChange={(e) => {
+                        setPlanetSizeScale(Number(e.target.value) / 100);
+                        queueAutosave();
+                      }}
                       className="settings-range w-full"
                     />
                     <div className="mt-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.22em] text-zinc-600">

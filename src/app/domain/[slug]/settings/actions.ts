@@ -71,7 +71,14 @@ export async function saveDomainSettings(
     },
   });
 
-  await scheduleDomainDriftWarning(domain.id);
+  try {
+    await scheduleDomainDriftWarning(domain.id);
+  } catch (error) {
+    console.error("Failed to schedule drift warning after settings save", {
+      domainId: domain.id,
+      error,
+    });
+  }
 
   revalidatePath("/");
   revalidatePath(`/domain/${domain.slug}`);
