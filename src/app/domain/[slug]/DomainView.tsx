@@ -22,6 +22,12 @@ import {
 import { QUOTES } from "./quotes";
 import "./domain.css";
 
+const QUOTE_REVEAL_DELAY_MS = 720;
+const QUOTE_HOLD_DELAY_MS = 1480;
+const QUOTE_COLLAPSE_DELAY_MS = 5200;
+const QUOTE_NAVIGATE_DELAY_MS = 5600;
+const QUOTE_FALLBACK_CLEAR_DELAY_MS = 7600;
+
 function hexToRgb(hex: string) {
   const h = hex.replace("#", "");
   return {
@@ -348,6 +354,7 @@ export function DomainView({
   const [quoteOverlay, setQuoteOverlay] = useState(false);
   const [quotePhase, setQuotePhase] = useState<"burst" | "reveal" | "hold" | "collapse" | "gone">("gone");
   const [quoteText, setQuoteText] = useState("");
+  const quoteTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 100);
@@ -382,7 +389,27 @@ export function DomainView({
     return () => observer.disconnect();
   }, [demoUser, domain.id, settings.commitmentRequirement]);
 
+  const clearQuoteTimers = useCallback(() => {
+    quoteTimersRef.current.forEach((timer) => clearTimeout(timer));
+    quoteTimersRef.current = [];
+  }, []);
+
+  useEffect(() => clearQuoteTimers, [clearQuoteTimers]);
+
+  const getPostCommitHref = useCallback(() => {
+    if (isAligning && !isLastInChain && alignChain) {
+      const nextIdx = alignIdx + 1;
+      const nextSlug = alignChain[nextIdx];
+      const slugs = alignChain.join(",");
+      return domainLink(nextSlug, `align=${encodeURIComponent(slugs)}&idx=${nextIdx}`);
+    }
+
+    return buildHomeUrl(domain.id);
+  }, [alignChain, alignIdx, buildHomeUrl, domain.id, domainLink, isAligning, isLastInChain]);
+
   const navigateAfterCommit = useCallback(() => {
+    router.push(getPostCommitHref());
+    return; /*
     if (isAligning && !isLastInChain && alignChain) {
       // Go to next domain in align chain
       const nextIdx = alignIdx + 1;
@@ -393,7 +420,7 @@ export function DomainView({
       // Last in chain or standalone — go home and spotlight the recommitted planet
       router.push(buildHomeUrl(domain.id));
     }
-  }, [alignChain, alignIdx, buildHomeUrl, domain.id, domainLink, isAligning, isLastInChain, router]);
+  */ }, [getPostCommitHref, router]);
 
   const navigateWithoutCommitPulse = useCallback(() => {
     if (isAligning && !isLastInChain && alignChain) {
@@ -412,22 +439,29 @@ export function DomainView({
     startTransition(async () => {
       const result = await createCommitment(domain.id, text.trim(), demoUser);
       if (result.success) {
+        const postCommitHref = getPostCommitHref();
+        router.prefetch(postCommitHref);
+        clearQuoteTimers();
         setText("");
         setQuoteText(getRandomQuote());
         setQuoteOverlay(true);
         setQuotePhase("burst");
         // Phase timeline: burst(0) → reveal(800ms) → hold(4.5s) → collapse(5.5s) → navigate(6.2s)
-        setTimeout(() => setQuotePhase("reveal"), 800);
-        setTimeout(() => setQuotePhase("hold"), 1600);
-        setTimeout(() => setQuotePhase("collapse"), 5500);
-        setTimeout(() => {
-          setQuotePhase("gone");
-          setQuoteOverlay(false);
-          navigateAfterCommit();
-        }, 6200);
+        quoteTimersRef.current = [
+          setTimeout(() => setQuotePhase("reveal"), QUOTE_REVEAL_DELAY_MS),
+          setTimeout(() => setQuotePhase("hold"), QUOTE_HOLD_DELAY_MS),
+          setTimeout(() => setQuotePhase("collapse"), QUOTE_COLLAPSE_DELAY_MS),
+          setTimeout(() => {
+            navigateAfterCommit();
+          }, QUOTE_NAVIGATE_DELAY_MS),
+          setTimeout(() => {
+            setQuotePhase("gone");
+            setQuoteOverlay(false);
+          }, QUOTE_FALLBACK_CLEAR_DELAY_MS),
+        ];
       }
     });
-  }, [text, demoUser, domain.id, startTransition, navigateAfterCommit]);
+  }, [clearQuoteTimers, demoUser, domain.id, getPostCommitHref, navigateAfterCommit, router, startTransition, text]);
 
   const handleSkip = useCallback(() => {
     if (isAligning) {

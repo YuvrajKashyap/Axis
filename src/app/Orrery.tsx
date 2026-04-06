@@ -75,6 +75,10 @@ const ARCHIVE_BASE_RADIUS = 1.25;
 const DEFAULT_ACTIVE_COLOR = "#67e8f9";
 const DEFAULT_DRIFTING_COLOR = "#f87171";
 const DEFAULT_ARCHIVED_COLOR = "#71717a";
+const RETURN_PULSE_START_DELAY_MS = 220;
+const RETURN_PULSE_DURATION_MS = 3300;
+const RETURN_PULSE_CLEAR_DELAY_MS = 420;
+const RETURN_PULSE_ANIMATION = `${RETURN_PULSE_DURATION_MS / 1000}s cubic-bezier(0.22,1,0.36,1) 1`;
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const h = hex.replace("#", "");
@@ -534,14 +538,18 @@ export function Orrery({
     if (!returnPulseDomainId) return;
 
     setReturnPulseTargetId(returnPulseDomainId);
-    setReturnPulseActive(true);
+    setReturnPulseActive(false);
+
+    const startTimer = window.setTimeout(() => {
+      setReturnPulseActive(true);
+    }, RETURN_PULSE_START_DELAY_MS);
 
     const fadeTimer = window.setTimeout(() => {
       setReturnPulseActive(false);
-    }, 3000);
+    }, RETURN_PULSE_START_DELAY_MS + RETURN_PULSE_DURATION_MS);
     const clearTimer = window.setTimeout(() => {
       setReturnPulseTargetId(null);
-    }, 3400);
+    }, RETURN_PULSE_START_DELAY_MS + RETURN_PULSE_DURATION_MS + RETURN_PULSE_CLEAR_DELAY_MS);
     const cleanupUrlTimer = window.setTimeout(() => {
       const url = new URL(window.location.href);
       if (!url.searchParams.has("pulseDomain")) return;
@@ -550,9 +558,10 @@ export function Orrery({
       router.replace(query ? `${url.pathname}?${query}` : url.pathname, {
         scroll: false,
       });
-    }, 3200);
+    }, RETURN_PULSE_START_DELAY_MS + RETURN_PULSE_DURATION_MS + 220);
 
     return () => {
+      window.clearTimeout(startTimer);
       window.clearTimeout(fadeTimer);
       window.clearTimeout(clearTimer);
       window.clearTimeout(cleanupUrlTimer);
@@ -1332,7 +1341,7 @@ export function Orrery({
                       : "none",
                     transition: dragging === i ? "none" : "color 0.3s, opacity 0.4s ease, filter 0.4s ease",
                     animation: isPulseFocus
-                      ? `ring-shimmer var(--shimmer-duration, 6s) ease-in-out infinite, orrery-return-ring-pulse 3s cubic-bezier(0.22,1,0.36,1) 1`
+                      ? `ring-shimmer var(--shimmer-duration, 6s) ease-in-out infinite, orrery-return-ring-pulse ${RETURN_PULSE_ANIMATION}`
                       : undefined,
                   }}
                 >
@@ -1559,7 +1568,7 @@ export function Orrery({
                           transition: "transform 0.25s ease, opacity 0.25s ease, filter 0.25s ease",
                           transform: isDraggingThis ? "scale(1.8)" : isHighlightMatch ? "scale(1.14)" : "scale(1)",
                           animation: isPulseFocus
-                            ? "orrery-return-halo-pulse 3s cubic-bezier(0.22,1,0.36,1) 1"
+                            ? `orrery-return-halo-pulse ${RETURN_PULSE_ANIMATION}`
                             : undefined,
                         }}
                       />
@@ -1580,7 +1589,7 @@ export function Orrery({
                           transition: "transform 0.2s ease, box-shadow 0.25s ease, filter 0.25s ease",
                           transform: isDraggingThis ? "scale(1.4)" : isHighlightMatch ? "scale(1.08)" : "scale(1)",
                           animation: isPulseFocus
-                            ? "orrery-return-planet-pulse 3s cubic-bezier(0.22,1,0.36,1) 1"
+                            ? `orrery-return-planet-pulse ${RETURN_PULSE_ANIMATION}`
                             : undefined,
                         }}
                       />
@@ -1601,7 +1610,7 @@ export function Orrery({
                                 : (isDraggingThis || isHighlightMatch ? cfg.color : "rgba(161,161,170,0.7)"),
                             textShadow: isHighlightMatch ? `0 0 14px ${cfg.color}2e` : isDrifting ? "0 0 8px rgba(248,113,113,0.4)" : "none",
                             animation: isPulseFocus
-                              ? "orrery-return-label-pulse 3s cubic-bezier(0.22,1,0.36,1) 1"
+                              ? `orrery-return-label-pulse ${RETURN_PULSE_ANIMATION}`
                               : undefined,
                           }}
                         >
