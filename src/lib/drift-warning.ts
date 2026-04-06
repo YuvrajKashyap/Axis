@@ -105,7 +105,6 @@ function buildWarningPayload(
   const driftDisabled = driftThresholdHours === null;
   const warningEligible =
     !driftDisabled &&
-    driftThresholdHours > DRIFT_WARNING_LEAD_HOURS &&
     domain.status !== "ARCHIVED" &&
     domain.status !== "DRIFTING" &&
     !driftState.autoDrifted &&
@@ -259,10 +258,6 @@ export async function scheduleDomainDriftWarning(domainId: string) {
 
   if (!warning.warningEligible || !warning.warningAt || !currentActivityAt) {
     return { scheduled: false, reason: "not-eligible" as const };
-  }
-
-  if (warning.driftThresholdHours !== null && warning.driftThresholdHours <= DRIFT_WARNING_LEAD_HOURS) {
-    return { scheduled: false, reason: "threshold-too-short" as const };
   }
 
   if (
