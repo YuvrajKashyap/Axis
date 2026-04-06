@@ -240,16 +240,16 @@ function buildGlowWithIntensity(
   const isSubtle = intensityMultiplier < 1;
   const isIntense = intensityMultiplier > 1;
   const saturationMultiplier = isSubtle
-    ? 0.08
+    ? 0.88
     : isIntense
-      ? 4.6
+      ? 2.25
       : 1;
   const lightnessMultiplier = isSubtle
-    ? 0.84
+    ? 0.98
     : isIntense
-      ? 1.08
+      ? 1.04
       : 1;
-  const lightnessOffset = isIntense ? 0.03 : 0;
+  const lightnessOffset = isIntense ? 0.015 : 0;
   const tunedColor = tuneHexColor(
     hex,
     saturationMultiplier,
@@ -257,15 +257,15 @@ function buildGlowWithIntensity(
     lightnessOffset,
   );
   const { r, g, b } = hexToRgb(tunedColor);
-  const spreadScale = isSubtle ? 0.18 : isIntense ? 4.3 : 1;
-  const alphaScale = isSubtle ? 0.1 : isIntense ? 3.8 : 1;
+  const spreadScale = isSubtle ? 0.82 : isIntense ? 1.25 : 1;
+  const alphaScale = isSubtle ? 0.78 : isIntense ? 1.2 : 1;
 
   if (status === "ARCHIVED") {
     if (isIntense) {
       return {
         color: tunedColor,
-        glow: `0 0 6px ${rgba(r, g, b, 0.94)}, 0 0 12px ${rgba(r, g, b, 0.72)}, 0 0 20px ${rgba(r, g, b, 0.38)}`,
-        glowSoft: `0 0 8px ${rgba(r, g, b, 0.34)}`,
+        glow: `0 0 6px ${rgba(r, g, b, 0.96)}, 0 0 12px ${rgba(r, g, b, 0.78)}, 0 0 18px ${rgba(r, g, b, 0.42)}`,
+        glowSoft: `0 0 8px ${rgba(r, g, b, 0.28)}`,
         ringColor: baseCfg.ringColor,
         label: baseCfg.label,
       };
@@ -284,17 +284,14 @@ function buildGlowWithIntensity(
   const primaryAlpha = isDrifting ? 0.8 : 0.9;
   const secondaryAlpha = isDrifting ? 0.4 : 0.5;
   const tertiaryAlpha = 0.15;
-  const extraBloom = isIntense
-    ? `, 0 0 ${210 * spreadScale}px ${rgba(r, g, b, 0.28 * alphaScale)}, 0 0 ${330 * spreadScale}px ${rgba(r, g, b, 0.14 * alphaScale)}`
-    : "";
 
   if (isIntense) {
     return {
       color: tunedColor,
       glow: isDrifting
-        ? `0 0 10px ${rgba(r, g, b, 1)}, 0 0 16px ${rgba(r, g, b, 0.94)}, 0 0 28px ${rgba(r, g, b, 0.82)}, 0 0 46px ${rgba(r, g, b, 0.5)}, 0 0 72px ${rgba(r, g, b, 0.22)}`
-        : `0 0 9px ${rgba(r, g, b, 1)}, 0 0 14px ${rgba(r, g, b, 0.98)}, 0 0 24px ${rgba(r, g, b, 0.9)}, 0 0 40px ${rgba(r, g, b, 0.58)}, 0 0 66px ${rgba(r, g, b, 0.24)}`,
-      glowSoft: `0 0 10px ${rgba(r, g, b, 0.54)}, 0 0 18px ${rgba(r, g, b, 0.22)}`,
+        ? `0 0 10px ${rgba(r, g, b, 1)}, 0 0 18px ${rgba(r, g, b, 0.96)}, 0 0 30px ${rgba(r, g, b, 0.72)}, 0 0 46px ${rgba(r, g, b, 0.24)}`
+        : `0 0 10px ${rgba(r, g, b, 1)}, 0 0 18px ${rgba(r, g, b, 0.98)}, 0 0 30px ${rgba(r, g, b, 0.76)}, 0 0 48px ${rgba(r, g, b, 0.26)}`,
+      glowSoft: `0 0 8px ${rgba(r, g, b, 0.5)}, 0 0 14px ${rgba(r, g, b, 0.18)}`,
       ringColor: baseCfg.ringColor,
       label: baseCfg.label,
     };
@@ -302,7 +299,7 @@ function buildGlowWithIntensity(
 
   return {
     color: tunedColor,
-    glow: `0 0 ${8 * spreadScale}px ${rgba(r, g, b, primaryAlpha * alphaScale)}, 0 0 ${22 * spreadScale}px ${rgba(r, g, b, secondaryAlpha * alphaScale)}, 0 0 ${50 * spreadScale}px ${rgba(r, g, b, tertiaryAlpha * alphaScale)}${extraBloom}`,
+    glow: `0 0 ${8 * spreadScale}px ${rgba(r, g, b, primaryAlpha * alphaScale)}, 0 0 ${22 * spreadScale}px ${rgba(r, g, b, secondaryAlpha * alphaScale)}, 0 0 ${50 * spreadScale}px ${rgba(r, g, b, tertiaryAlpha * alphaScale)}`,
     glowSoft: `0 0 ${6 * spreadScale}px ${rgba(r, g, b, 0.4 * alphaScale)}`,
     ringColor: baseCfg.ringColor,
     label: baseCfg.label,
