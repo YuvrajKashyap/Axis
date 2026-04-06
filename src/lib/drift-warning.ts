@@ -162,7 +162,7 @@ async function sendDriftWarningEmail(domain: DomainWarningContext) {
       <div style="background:#09090b;color:#f4f4f5;padding:32px;font-family:Inter,Helvetica,Arial,sans-serif;">
         <p style="margin:0 0 16px;font-size:11px;letter-spacing:0.32em;text-transform:uppercase;color:#71717a;">Axis</p>
         <h1 style="margin:0 0 16px;font-size:24px;line-height:1.2;font-weight:600;">${escapeHtml(domain.name)} drifts in 12 hours.</h1>
-        <p style="margin:0;color:#d4d4d8;font-size:15px;line-height:1.7;">Recommit or let it drift. No negotiation.</p>
+        <p style="margin:0;color:#d4d4d8;font-size:15px;line-height:1.7;">Recommit or let it drift.</p>
         ${latestCommitmentHtml}
         ${
           domainUrl
