@@ -15,6 +15,17 @@ type CommitmentRecord = {
   createdAt: string;
 };
 
+async function scheduleDomainDriftWarningSafely(domainId: string) {
+  try {
+    await scheduleDomainDriftWarning(domainId);
+  } catch (error) {
+    console.error("Failed to schedule drift warning after domain mutation", {
+      domainId,
+      error,
+    });
+  }
+}
+
 export async function updateDomainStatus(
   domainId: string,
   status: "ALIGNED" | "DRIFTING" | "ARCHIVED",
@@ -30,7 +41,7 @@ export async function updateDomainStatus(
     data: { status },
   });
 
-  await scheduleDomainDriftWarning(domainId);
+  await scheduleDomainDriftWarningSafely(domainId);
   revalidatePath("/");
 }
 
@@ -88,7 +99,7 @@ export async function createCommitment(
       },
     });
 
-    await scheduleDomainDriftWarning(domain.id);
+    await scheduleDomainDriftWarningSafely(domain.id);
     revalidatePath("/");
     return { success: true };
   } catch {
@@ -127,7 +138,7 @@ export async function recordPassiveAlignmentTouch(
     },
   });
 
-  await scheduleDomainDriftWarning(domain.id);
+  await scheduleDomainDriftWarningSafely(domain.id);
   revalidatePath("/");
   return { success: true };
 }
