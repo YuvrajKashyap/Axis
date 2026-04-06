@@ -53,14 +53,157 @@ export default function HowItWorksPage() {
               <div className="flex gap-6 items-start">
                 <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-16">Align</span>
                 <p className="text-zinc-400 leading-relaxed text-[15px]">
-                  Click Align to enter the reset flow. For each active domain, write one commitment.
-                  The single next thing you will do. Not a wish. Not a plan. An action.
+                  Click Align to move through your active domains one by one.
+                  For each one, lock in the single next thing you will do.
+                  Not a wish. Not a plan. An action.
                 </p>
               </div>
               <div className="flex gap-6 items-start">
                 <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-16">Execute</span>
                 <p className="text-zinc-400 leading-relaxed text-[15px]">
                   Go do it. Come back when you&apos;re ready for the next one.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* How to Use Axis */}
+          <section>
+            <h2 className="font-mono text-[11px] tracking-[0.4em] uppercase text-zinc-500 mb-4">
+              How to use Axis
+            </h2>
+            <p className="text-zinc-400 leading-relaxed text-[15px] mb-10">
+              If you are new, do not try to map your whole life perfectly on day one.
+              Create a few domains that actually matter right now, fill them in honestly,
+              make one real commitment, then return to the orrery. Axis works best when it
+              gets you back into action quickly.
+            </p>
+
+            <div className="space-y-8">
+              <div className="flex gap-6 items-start">
+                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-20">
+                  Start
+                </span>
+                <p className="text-zinc-400 leading-relaxed text-[15px]">
+                  After signing in, create a few planets for the areas of life that matter most.
+                  Keep it focused. Health, work, relationships, a craft, a business, whatever is
+                  actually alive in your life. Then click into each one and write the identity,
+                  vision, reason, and cost so the planet means something when you return to it later.
+                </p>
+              </div>
+
+              <div className="flex gap-6 items-start">
+                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-20">
+                  Orrery
+                </span>
+                <p className="text-zinc-400 leading-relaxed text-[15px]">
+                  The homepage is your live map. Every planet is a domain. Active planets stay in orbit.
+                  Drifting planets move outward when they have gone stale. Archived planets are set aside on purpose.
+                  What feels close, bright, and present is what is alive in the system. Drift is not a punishment.
+                  It is the app showing you what has not been touched recently.
+                </p>
+              </div>
+
+              <div className="flex gap-6 items-start">
+                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-20">
+                  Domain
+                </span>
+                <p className="text-zinc-400 leading-relaxed text-[15px]">
+                  When you click a planet, use that page to reconnect with direction. Review who you are in that
+                  domain, what success looks like, why it matters, and what neglect costs. Then make one concrete
+                  commitment. The point is to leave with clarity, not to sit there polishing language forever.
+                </p>
+              </div>
+
+              <div className="flex gap-6 items-start">
+                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-20">
+                  Align
+                </span>
+                <p className="text-zinc-400 leading-relaxed text-[15px]">
+                  Align is a guided reset. It walks through your active domains one by one and asks for the next move
+                  in each area. You are not writing goals for the quarter. You are reorienting the system and locking
+                  in a real next action for what is currently in orbit.
+                </p>
+              </div>
+
+              <div className="flex gap-6 items-start">
+                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-20">
+                  Rhythm
+                </span>
+                <p className="text-zinc-400 leading-relaxed text-[15px]">
+                  Use Axis when you feel off track, when something important is starting to slip, or when you need
+                  to refresh commitments across the system. Open it, realign, close it, act. It is supposed to shorten
+                  time-to-action, not become a place to linger.
+                </p>
+              </div>
+
+              <div className="rounded-[26px] border border-zinc-900/90 bg-zinc-950/35 px-5 py-8">
+                <div className="mb-[3.75rem] flex items-center justify-center gap-3 text-center">
+                  <div className="h-1.5 w-1.5 rounded-full bg-zinc-500/70 shadow-[0_0_12px_rgba(255,255,255,0.12)]" />
+                  <p className="font-mono text-[10px] tracking-[0.35em] uppercase text-zinc-600">
+                    What to write
+                  </p>
+                </div>
+
+                <div className="mx-auto max-w-[36rem] space-y-[3.75rem]">
+                  <div className="text-center">
+                    <p className="font-mono text-[10px] tracking-[0.28em] uppercase text-zinc-500 mb-2">
+                      Vision
+                    </p>
+                    <p className="text-zinc-400 leading-relaxed text-[14px]">
+                      What success looks like when this part of life is actually working.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-12 sm:grid-cols-2">
+                    <div className="text-center">
+                      <p className="font-mono text-[10px] tracking-[0.28em] uppercase text-zinc-500 mb-2">
+                        Reason
+                      </p>
+                      <p className="text-zinc-400 leading-relaxed text-[14px]">
+                        Why this domain matters to you. Keep it personal and real.
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-mono text-[10px] tracking-[0.28em] uppercase text-zinc-500 mb-2">
+                        Cost
+                      </p>
+                      <p className="text-zinc-400 leading-relaxed text-[14px]">
+                        What happens if you neglect it. This should create honesty, not drama.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-center">
+                    <p className="font-mono text-[10px] tracking-[0.28em] uppercase text-zinc-500 mb-2">
+                      Commitment
+                    </p>
+                    <p className="text-zinc-400 leading-relaxed text-[14px]">
+                      The next concrete action. Something you can actually do, not a vague intention.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-6 items-start">
+                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-20">
+                  Settings
+                </span>
+                <p className="text-zinc-400 leading-relaxed text-[15px]">
+                  Every planet now has its own settings. You can change drift timing, commitment behavior,
+                  orbit speed, visual intensity, size, and orbit shape. Leave them alone and the product behaves
+                  exactly like the default Axis system. Change them only when a domain needs a different rule.
+                </p>
+              </div>
+
+              <div className="flex gap-6 items-start">
+                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-20">
+                  Mindset
+                </span>
+                <p className="text-zinc-400 leading-relaxed text-[15px]">
+                  Axis is not a task manager, habit tracker, or productivity game. There are no feeds, no streaks,
+                  and no dopamine loops to farm. It is a personal alignment system. Use it to see reality, set direction,
+                  and get back to work.
                 </p>
               </div>
             </div>
