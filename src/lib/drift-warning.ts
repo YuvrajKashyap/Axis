@@ -14,7 +14,10 @@ const DRIFT_WARNING_TOLERANCE_MS = 90 * 60 * 1000;
 const DRIFT_WARNING_LEAD_MS = DRIFT_WARNING_LEAD_HOURS * 60 * 60 * 1000;
 
 const qstashClient = process.env.QSTASH_TOKEN
-  ? new Client({ token: process.env.QSTASH_TOKEN })
+  ? new Client({
+      token: process.env.QSTASH_TOKEN,
+      ...(process.env.QSTASH_URL ? { baseUrl: process.env.QSTASH_URL } : {}),
+    })
   : null;
 
 const resendClient = process.env.RESEND_API_KEY
