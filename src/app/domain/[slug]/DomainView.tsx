@@ -24,8 +24,7 @@ import "./domain.css";
 
 const QUOTE_REVEAL_DELAY_MS = 720;
 const QUOTE_HOLD_DELAY_MS = 1480;
-const QUOTE_COLLAPSE_DELAY_MS = 5200;
-const QUOTE_NAVIGATE_DELAY_MS = 5600;
+const QUOTE_NAVIGATE_DELAY_MS = 5200;
 const QUOTE_FALLBACK_CLEAR_DELAY_MS = 7600;
 
 function hexToRgb(hex: string) {
@@ -450,7 +449,6 @@ export function DomainView({
         quoteTimersRef.current = [
           setTimeout(() => setQuotePhase("reveal"), QUOTE_REVEAL_DELAY_MS),
           setTimeout(() => setQuotePhase("hold"), QUOTE_HOLD_DELAY_MS),
-          setTimeout(() => setQuotePhase("collapse"), QUOTE_COLLAPSE_DELAY_MS),
           setTimeout(() => {
             navigateAfterCommit();
           }, QUOTE_NAVIGATE_DELAY_MS),
