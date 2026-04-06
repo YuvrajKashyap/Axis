@@ -193,9 +193,9 @@ function buildPreviewPlanetVisual(hex: string, intensity: DomainVisualIntensityV
 
   const isSubtle = intensityMultiplier < 1;
   const isIntense = intensityMultiplier > 1;
-  const saturationMultiplier = isSubtle ? 0.08 : isIntense ? 4.6 : 1;
-  const lightnessMultiplier = isSubtle ? 0.84 : isIntense ? 1.08 : 1;
-  const lightnessOffset = isIntense ? 0.03 : 0;
+  const saturationMultiplier = isSubtle ? 0.88 : isIntense ? 2.25 : 1;
+  const lightnessMultiplier = isSubtle ? 0.98 : isIntense ? 1.04 : 1;
+  const lightnessOffset = isIntense ? 0.015 : 0;
   const tunedColor = tuneHexColor(
     hex,
     saturationMultiplier,
@@ -206,14 +206,14 @@ function buildPreviewPlanetVisual(hex: string, intensity: DomainVisualIntensityV
   if (isIntense) {
     return {
       color: tunedColor,
-      glow: `0 0 9px ${withAlpha(tunedColor, 1)}, 0 0 14px ${withAlpha(tunedColor, 0.98)}, 0 0 24px ${withAlpha(tunedColor, 0.9)}, 0 0 40px ${withAlpha(tunedColor, 0.58)}, 0 0 66px ${withAlpha(tunedColor, 0.24)}`,
+      glow: `0 0 10px ${withAlpha(tunedColor, 1)}, 0 0 18px ${withAlpha(tunedColor, 0.98)}, 0 0 30px ${withAlpha(tunedColor, 0.76)}, 0 0 48px ${withAlpha(tunedColor, 0.26)}`,
       ringColor: withAlpha(hex, 0.06),
     };
   }
 
   return {
     color: tunedColor,
-    glow: `0 0 1.44px ${withAlpha(tunedColor, 0.09)}, 0 0 3.96px ${withAlpha(tunedColor, 0.05)}, 0 0 9px ${withAlpha(tunedColor, 0.015)}`,
+    glow: `0 0 6.56px ${withAlpha(tunedColor, 0.7)}, 0 0 18.04px ${withAlpha(tunedColor, 0.31)}, 0 0 41px ${withAlpha(tunedColor, 0.117)}`,
     ringColor: withAlpha(hex, 0.06),
   };
 }
@@ -670,9 +670,14 @@ export function DomainSettingsView({
                     background: `radial-gradient(circle, ${withAlpha(previewPlanetVisual.color, 0.15)} 0%, transparent 72%)`,
                     filter:
                       draftSettings.visualIntensity === "INTENSE"
-                        ? "blur(12px)"
-                        : `blur(${draftSettings.visualIntensity === "SUBTLE" ? 2 : 8}px)`,
-                    opacity: draftSettings.visualIntensity === "SUBTLE" ? 0.45 : 0.92,
+                        ? "blur(10px)"
+                        : `blur(${draftSettings.visualIntensity === "SUBTLE" ? 6 : 8}px)`,
+                    opacity:
+                      draftSettings.visualIntensity === "SUBTLE"
+                        ? 0.72
+                        : draftSettings.visualIntensity === "INTENSE"
+                          ? 0.9
+                          : 0.82,
                   }}
                 />
                 <div
