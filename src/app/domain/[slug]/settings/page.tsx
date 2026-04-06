@@ -18,6 +18,7 @@ async function getDomainSettingsDetail(userId: string, slug: string) {
       name: true,
       slug: true,
       color: true,
+      positionX: true,
       driftMode: true,
       driftThresholdHours: true,
       commitmentRequirement: true,
@@ -65,6 +66,7 @@ export default async function DomainSettingsPage({
         name: domain.name,
         slug: domain.slug,
         color: domain.color,
+        positionX: domain.positionX,
       }}
       settings={normalizeDomainSettings({
         driftMode: domain.driftMode,

@@ -16,7 +16,13 @@ import {
   type DomainVisualIntensityValue,
 } from "@/lib/domain-settings";
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import { saveDomainSettings } from "./actions";
 import "./settings.css";
 
@@ -26,6 +32,7 @@ type DomainSettingsViewProps = {
     name: string;
     slug: string;
     color: string | null;
+    positionX: number;
   };
   settings: DomainSettingsSnapshot;
   backHref: string;
@@ -41,6 +48,8 @@ type DriftSelectValue =
   | "7d"
   | "never"
   | "custom";
+
+type SettingsTabKey = "behavior" | "motion" | "visual";
 
 function driftSelectFromSettings(
   settings: DomainSettingsSnapshot,
@@ -67,34 +76,222 @@ function customValueFromHours(hours: number) {
   return unit === "days" ? Math.max(1, Math.round(hours / 24)) : hours;
 }
 
-function getPreviewPlanetSize(scale: number) {
-  return Math.max(10, Math.min(36, 18 * scale));
+function hexToRgb(hex: string) {
+  const normalized = hex.replace("#", "");
+  const expanded =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((char) => `${char}${char}`)
+          .join("")
+      : normalized;
+
+  if (!/^[0-9a-fA-F]{6}$/.test(expanded)) {
+    return { r: 103, g: 232, b: 249 };
+  }
+
+  const value = Number.parseInt(expanded, 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
+  };
 }
 
-function SegmentedOption<T extends string>({
+function rgbToHsl(r: number, g: number, b: number) {
+  const red = r / 255;
+  const green = g / 255;
+  const blue = b / 255;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case red:
+        h = (green - blue) / d + (green < blue ? 6 : 0);
+        break;
+      case green:
+        h = (blue - red) / d + 2;
+        break;
+      default:
+        h = (red - green) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+
+  return { h, s, l };
+}
+
+function hueToRgb(p: number, q: number, t: number) {
+  let next = t;
+  if (next < 0) next += 1;
+  if (next > 1) next -= 1;
+  if (next < 1 / 6) return p + (q - p) * 6 * next;
+  if (next < 1 / 2) return q;
+  if (next < 2 / 3) return p + (q - p) * (2 / 3 - next) * 6;
+  return p;
+}
+
+function hslToHex(h: number, s: number, l: number) {
+  if (s === 0) {
+    const value = Math.round(l * 255)
+      .toString(16)
+      .padStart(2, "0");
+    return `#${value}${value}${value}`;
+  }
+
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const r = hueToRgb(p, q, h + 1 / 3);
+  const g = hueToRgb(p, q, h);
+  const b = hueToRgb(p, q, h - 1 / 3);
+
+  return `#${[r, g, b]
+    .map((channel) =>
+      Math.round(channel * 255)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+}
+
+function tuneHexColor(
+  hex: string,
+  saturationMultiplier: number,
+  lightnessMultiplier: number,
+  lightnessOffset: number = 0,
+) {
+  const { r, g, b } = hexToRgb(hex);
+  const hsl = rgbToHsl(r, g, b);
+  return hslToHex(
+    hsl.h,
+    Math.max(0, Math.min(1, hsl.s * saturationMultiplier)),
+    Math.max(0, Math.min(1, hsl.l * lightnessMultiplier + lightnessOffset)),
+  );
+}
+
+function withAlpha(hex: string, alpha: number) {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, alpha))})`;
+}
+
+function buildPreviewPlanetVisual(hex: string, intensity: DomainVisualIntensityValue) {
+  const intensityMultiplier = getVisualIntensityMultiplier(intensity);
+  if (intensityMultiplier === 1) {
+    return {
+      color: hex,
+      glow: `0 0 8px ${withAlpha(hex, 0.9)}, 0 0 22px ${withAlpha(hex, 0.5)}, 0 0 50px ${withAlpha(hex, 0.15)}`,
+      ringColor: withAlpha(hex, 0.06),
+    };
+  }
+
+  const isSubtle = intensityMultiplier < 1;
+  const isIntense = intensityMultiplier > 1;
+  const saturationMultiplier = isSubtle ? 0.08 : isIntense ? 4.6 : 1;
+  const lightnessMultiplier = isSubtle ? 0.84 : isIntense ? 1.08 : 1;
+  const lightnessOffset = isIntense ? 0.03 : 0;
+  const tunedColor = tuneHexColor(
+    hex,
+    saturationMultiplier,
+    lightnessMultiplier,
+    lightnessOffset,
+  );
+
+  if (isIntense) {
+    return {
+      color: tunedColor,
+      glow: `0 0 9px ${withAlpha(tunedColor, 1)}, 0 0 14px ${withAlpha(tunedColor, 0.98)}, 0 0 24px ${withAlpha(tunedColor, 0.9)}, 0 0 40px ${withAlpha(tunedColor, 0.58)}, 0 0 66px ${withAlpha(tunedColor, 0.24)}`,
+      ringColor: withAlpha(hex, 0.06),
+    };
+  }
+
+  return {
+    color: tunedColor,
+    glow: `0 0 1.44px ${withAlpha(tunedColor, 0.09)}, 0 0 3.96px ${withAlpha(tunedColor, 0.05)}, 0 0 9px ${withAlpha(tunedColor, 0.015)}`,
+    ringColor: withAlpha(hex, 0.06),
+  };
+}
+
+function getPreviewPlanetSize(normalizedRadius: number, sizeScale: number) {
+  const sunCore = 18;
+  const maxPlanet = Math.round(sunCore * 0.65);
+  const maxPlanetScaleCap = sunCore * 0.7;
+  const scaledBase = 7 + (1 - normalizedRadius / 0.92) * (maxPlanet - 7);
+  return Math.min(maxPlanetScaleCap, scaledBase * sizeScale);
+}
+
+function Pill<T extends string>({
   value,
   current,
   label,
   onChange,
+  accentColor,
 }: {
   value: T;
   current: T;
   label: string;
   onChange: (value: T) => void;
+  accentColor: string;
 }) {
   const active = current === value;
 
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={() => onChange(value)}
-      className={`settings-segment rounded-full px-4 py-2 text-[10px] font-mono uppercase tracking-[0.28em] transition-colors duration-300 ${
-        active ? "text-zinc-100" : "text-zinc-600 hover:text-zinc-300"
+      className={`rounded border px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.18em] transition-all duration-200 ${
+        active
+          ? ""
+          : "border-white/[0.04] bg-transparent text-zinc-600 hover:border-white/10 hover:text-zinc-400"
       }`}
-      data-active={active ? "true" : "false"}
+      style={
+        active
+          ? {
+              borderColor: withAlpha(accentColor, 0.32),
+              backgroundColor: withAlpha(accentColor, 0.08),
+              color: accentColor,
+              boxShadow: `inset 0 0 12px ${withAlpha(accentColor, 0.05)}`,
+            }
+          : undefined
+      }
     >
       {label}
     </button>
+  );
+}
+
+function SettingRow({
+  label,
+  detail,
+  children,
+}: {
+  label: string;
+  detail?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="border-b border-white/[0.04] py-6 last:border-b-0">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-[12px] font-medium tracking-wide text-zinc-200">
+            {label}
+          </h2>
+          {detail ? (
+            <p className="mt-1 max-w-md text-[11px] leading-relaxed text-zinc-600">
+              {detail}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -105,6 +302,7 @@ export function DomainSettingsView({
   homeHref,
   targetUserId,
 }: DomainSettingsViewProps) {
+  const [activeTab, setActiveTab] = useState<SettingsTabKey>("behavior");
   const [isPending, startTransition] = useTransition();
   const [saveState, setSaveState] = useState<"idle" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState("");
@@ -114,6 +312,7 @@ export function DomainSettingsView({
     () => normalizeDomainSettings(DEFAULT_DOMAIN_SETTINGS),
     [],
   );
+
   const [savedSettings, setSavedSettings] = useState(initialSettings);
   const [autosaveRevision, setAutosaveRevision] = useState(0);
   const [driftSelect, setDriftSelect] = useState<DriftSelectValue>(
@@ -159,7 +358,20 @@ export function DomainSettingsView({
     setAutosaveRevision((value) => value + 1);
   };
 
+  const changeCustomUnit = (nextUnit: "hours" | "days") => {
+    if (nextUnit === customUnit) return;
+
+    setCustomUnit(nextUnit);
+    setCustomValue((currentValue) =>
+      nextUnit === "days"
+        ? Math.max(1, Math.min(7, Math.round(currentValue / 24) || 1))
+        : Math.max(1, Math.min(168, currentValue * 24)),
+    );
+    queueAutosave();
+  };
+
   const color = domain.color ?? "#67e8f9";
+  const accentColor = color;
 
   const effectiveCustomHours =
     customUnit === "days" ? Math.min(7, customValue) * 24 : Math.min(168, customValue);
@@ -238,360 +450,191 @@ export function DomainSettingsView({
           ? "saved"
           : "";
 
-  const previewGlow = getVisualIntensityMultiplier(visualIntensity);
-  const previewPlanetSize = getPreviewPlanetSize(planetSizeScale);
-  const previewOrbitScaleY = getOrbitEccentricityRatio(orbitEccentricity);
-  const previewSemiMajor = 70;
-  const previewSemiMinor = previewSemiMajor * previewOrbitScaleY;
+  const tabs: Array<{ key: SettingsTabKey; label: string; num: string }> = [
+    { key: "behavior", label: "Behavior", num: "01" },
+    { key: "motion", label: "Motion", num: "02" },
+    { key: "visual", label: "Visual", num: "03" },
+  ];
+
+  const driftSummaryLabel =
+    draftSettings.driftMode === "NEVER"
+      ? "off"
+      : formatDriftThresholdLabel(draftSettings.driftThresholdHours);
+
+  const currentConfigItems = [
+    { label: "Drift", value: driftSummaryLabel },
+    {
+      label: "Commit",
+      value:
+        draftSettings.commitmentRequirement === "STANDARD"
+          ? "standard"
+          : "passive",
+    },
+    { label: "Speed", value: draftSettings.orbitSpeed.toLowerCase() },
+    {
+      label: "Shape",
+      value:
+        draftSettings.orbitEccentricity === "DEFAULT"
+          ? "default"
+          : draftSettings.orbitEccentricity === "SLIGHTLY_ELLIPTICAL"
+            ? "slight"
+            : "very",
+    },
+    { label: "Visual", value: draftSettings.visualIntensity.toLowerCase() },
+    { label: "Size", value: `${Math.round(draftSettings.planetSizeScale * 100)}%` },
+  ];
+
+  const previewPlanetVisual = buildPreviewPlanetVisual(
+    color,
+    draftSettings.visualIntensity,
+  );
+  const previewOrbitRatio = getOrbitEccentricityRatio(
+    draftSettings.orbitEccentricity,
+  );
+  const previewSemiMajor = 62;
+  const previewSemiMinor = previewSemiMajor * previewOrbitRatio;
   const previewAngle = -0.72;
   const previewPlanetX = Math.cos(previewAngle) * previewSemiMajor;
   const previewPlanetY = Math.sin(previewAngle) * previewSemiMinor;
+  const previewPlanetSize = getPreviewPlanetSize(
+    Number.isFinite(domain.positionX) ? domain.positionX : 0.6,
+    draftSettings.planetSizeScale,
+  );
 
   return (
-    <main className="min-h-screen bg-black text-white">
-      <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8 md:px-12 md:py-10">
-        <div className="mb-10 flex items-start justify-between gap-6">
-          <div className="relative space-y-4">
+    <main className="min-h-screen bg-black pb-20 text-white">
+      <div className="border-b border-white/[0.05] bg-black/60">
+        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-5 py-4 sm:px-8 md:px-10">
+          <div className="flex min-w-0 items-center gap-4 sm:gap-6">
             <Link
               href={homeHref}
-              className="fixed top-5 left-4 z-30 inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-700 transition-colors hover:text-zinc-300 sm:left-5 md:top-7 md:left-7"
-            >
-              <span aria-hidden>←</span>
-              Axis
-            </Link>
-            <Link
-              href={backHref}
-              className="inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-700 transition-colors hover:text-zinc-300"
+              className="inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-600 transition-colors hover:text-zinc-300"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
-                <path d="M7.5 2.5 4 6l3.5 3.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M7.5 2.5 4 6l3.5 3.5"
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Axis
+            </Link>
+            <div className="h-4 w-px bg-white/[0.06]" />
+            <Link
+              href={backHref}
+              className="inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-600 transition-colors hover:text-zinc-300"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+                <path
+                  d="M7.5 2.5 4 6l3.5 3.5"
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
               Back
             </Link>
-            <div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.42em] text-zinc-600">
-                Planet Settings
-              </p>
-              <h1
-                className="mt-3 text-3xl font-semibold tracking-tight text-zinc-100 md:text-5xl"
-                style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
-              >
-                {domain.name}
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-zinc-500">
-                Defaults preserve the current Axis behavior exactly. Change only what this planet needs.
-              </p>
+          </div>
+
+          <div className="min-w-0 text-right">
+            <p className="text-[9px] font-mono uppercase tracking-[0.4em] text-zinc-600">
+              Planet Settings
+            </p>
+            <h1
+              className="mt-2 truncate text-lg font-semibold tracking-tight text-zinc-200 sm:text-2xl"
+              style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
+            >
+              {domain.name}
+            </h1>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto grid max-w-[1400px] lg:grid-cols-[280px_1fr]">
+        <aside className="border-b border-white/[0.04] px-5 pb-8 pt-10 sm:px-8 lg:sticky lg:top-[73px] lg:h-[calc(100vh-73px)] lg:overflow-y-auto lg:border-b-0 lg:border-r">
+          <div>
+            <p className="mb-3 text-[8px] font-mono uppercase tracking-[0.5em] text-zinc-700">
+              Sections
+            </p>
+            <div className="space-y-[1px]">
+              {tabs.map((tab) => {
+                const active = activeTab === tab.key;
+
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`relative flex w-full items-center gap-3 rounded px-3 py-2.5 text-left transition-all duration-150 ${
+                      active
+                        ? ""
+                        : "text-zinc-600 hover:bg-white/[0.02] hover:text-zinc-400"
+                    }`}
+                    style={
+                      active
+                        ? {
+                            backgroundColor: withAlpha(accentColor, 0.05),
+                            color: accentColor,
+                          }
+                        : undefined
+                    }
+                  >
+                    {active ? (
+                      <span
+                        className="absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 rounded-full"
+                        style={{
+                          backgroundColor: accentColor,
+                          boxShadow: `0 0 8px ${withAlpha(accentColor, 0.4)}`,
+                        }}
+                      />
+                    ) : null}
+                    <span
+                      className="text-[9px] font-mono"
+                      style={{
+                        color: active ? withAlpha(accentColor, 0.62) : undefined,
+                      }}
+                    >
+                      {tab.num}
+                    </span>
+                    <span className="text-[10px] font-mono uppercase tracking-[0.2em]">
+                      {tab.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-col items-end gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                applySettings(defaultSettings);
-                queueAutosave();
-              }}
-              disabled={isPending && !isDirty}
-              className="inline-flex items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.03] px-4 py-2 text-[9px] font-mono uppercase tracking-[0.28em] text-zinc-300 transition-colors hover:border-white/18 hover:bg-white/[0.05] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-35"
-            >
-              Restore to defaults
-            </button>
-            {statusLabel ? (
-              <p className="text-[9px] font-mono uppercase tracking-[0.22em] text-zinc-700">
-                {statusLabel}
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="space-y-8">
-            <section className="settings-panel rounded-[28px] border border-white/[0.06] px-5 py-6 sm:px-7 sm:py-7">
-              <div className="mb-7">
-                <p className="text-[10px] font-mono uppercase tracking-[0.38em] text-zinc-500">
-                  Behavior
-                </p>
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-500">
-                  By default, planets drift after 72 hours without commitment. You can override that for this planet without affecting the rest of the system.
-                </p>
+          <div className="mt-10 space-y-4">
+            <p className="mb-3 text-[9px] font-mono uppercase tracking-[0.4em] text-zinc-700">
+              Current Configuration
+            </p>
+            <div className="h-px bg-white/[0.04]" />
+            {currentConfigItems.map((item) => (
+              <div key={item.label} className="flex items-center justify-between py-1">
+                <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-700">
+                  {item.label}
+                </span>
+                <span className="text-[10px] font-mono text-zinc-300">
+                  {item.value}
+                </span>
               </div>
-
-              <div className="space-y-8">
-                <div>
-                  <div className="mb-3 flex items-center justify-between gap-4">
-                    <div>
-                      <h2 className="text-sm font-medium text-zinc-100">
-                        Time Until Drift Without Commitment
-                      </h2>
-                      <p className="mt-2 text-sm leading-7 text-zinc-500">
-                        Sets when this planet should auto-drift from its last qualifying alignment touch.
-                      </p>
-                    </div>
-                    <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-zinc-600">
-                      {driftSelect === "never"
-                        ? "drift disabled"
-                        : formatDriftThresholdLabel(
-                            driftSelect === "custom"
-                              ? effectiveCustomHours
-                              : driftSelect === "7d"
-                                ? 168
-                                : Number.parseInt(driftSelect, 10),
-                          )}
-                    </p>
-                  </div>
-
-                  <select
-                    value={driftSelect}
-                    onChange={(e) => {
-                      const value = e.target.value as DriftSelectValue;
-                      setDriftSelect(value);
-                      queueAutosave();
-                    }}
-                    className="settings-select w-full rounded-2xl border border-white/[0.08] bg-transparent px-4 py-3 text-sm text-zinc-200 outline-none"
-                  >
-                    <option value="24h">24h</option>
-                    <option value="48h">48h</option>
-                    <option value="72h">72h (default)</option>
-                    <option value="96h">96h</option>
-                    <option value="7d">7d</option>
-                    <option value="never">Never</option>
-                    <option value="custom">Custom</option>
-                  </select>
-
-                  {driftSelect === "custom" && (
-                    <div className="mt-4 rounded-[22px] border border-white/[0.05] bg-white/[0.02] p-4">
-                      <div className="mb-4 flex items-center justify-between gap-4">
-                        <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-zinc-500">
-                          Custom threshold
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <SegmentedOption
-                            value="hours"
-                            current={customUnit}
-                            label="Hours"
-                            onChange={(value) => {
-                              setCustomUnit(value);
-                              queueAutosave();
-                            }}
-                          />
-                          <SegmentedOption
-                            value="days"
-                            current={customUnit}
-                            label="Days"
-                            onChange={(value) => {
-                              setCustomUnit(value);
-                              queueAutosave();
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <input
-                        type="range"
-                        min={1}
-                        max={customUnit === "days" ? 7 : 168}
-                        step={1}
-                        value={customValue}
-                        onChange={(e) => {
-                          setCustomValue(Number(e.target.value));
-                          queueAutosave();
-                        }}
-                        className="settings-range w-full"
-                      />
-                      <div className="mt-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.22em] text-zinc-600">
-                        <span>1 {customUnit === "days" ? "day" : "hour"}</span>
-                        <span>{customValue} {customUnit}</span>
-                        <span>{customUnit === "days" ? "7 days" : "168 hours max"}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <div className="mb-4">
-                    <h2 className="text-sm font-medium text-zinc-100">
-                      Commitment Requirement
-                    </h2>
-                    <p className="mt-2 text-sm leading-7 text-zinc-500">
-                      Standard preserves the current app behavior. Passive Alignment counts reaching the commit section as a recommit even without typed text.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <SegmentedOption
-                      value="STANDARD"
-                      current={commitmentRequirement}
-                      label="Standard"
-                      onChange={(value) => {
-                        setCommitmentRequirement(value);
-                        queueAutosave();
-                      }}
-                    />
-                    <SegmentedOption
-                      value="PASSIVE_ALIGNMENT"
-                      current={commitmentRequirement}
-                      label="Passive Alignment"
-                      onChange={(value) => {
-                        setCommitmentRequirement(value);
-                        queueAutosave();
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="settings-panel rounded-[28px] border border-white/[0.06] px-5 py-6 sm:px-7 sm:py-7">
-              <div className="mb-7">
-                <p className="text-[10px] font-mono uppercase tracking-[0.38em] text-zinc-500">
-                  Motion
-                </p>
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-500">
-                  These controls change how this planet moves without altering the rest of the orrery.
-                </p>
-              </div>
-
-              <div className="space-y-8">
-                <div>
-                  <h2 className="text-sm font-medium text-zinc-100">Orbit Speed</h2>
-                  <p className="mt-2 text-sm leading-7 text-zinc-500">
-                    Standard equals the current Axis motion. Other options layer on top of that base behavior.
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <SegmentedOption value="STILL" current={orbitSpeed} label="Still" onChange={(value) => {
-                      setOrbitSpeed(value);
-                      queueAutosave();
-                    }} />
-                    <SegmentedOption value="SLOW" current={orbitSpeed} label="Slow" onChange={(value) => {
-                      setOrbitSpeed(value);
-                      queueAutosave();
-                    }} />
-                    <SegmentedOption value="STANDARD" current={orbitSpeed} label="Standard" onChange={(value) => {
-                      setOrbitSpeed(value);
-                      queueAutosave();
-                    }} />
-                    <SegmentedOption value="FAST" current={orbitSpeed} label="Fast" onChange={(value) => {
-                      setOrbitSpeed(value);
-                      queueAutosave();
-                    }} />
-                  </div>
-                </div>
-
-                <div>
-                  <h2 className="text-sm font-medium text-zinc-100">Orbit Eccentricity</h2>
-                  <p className="mt-2 text-sm leading-7 text-zinc-500">
-                    Default preserves the current orbit shape. Elliptical modes only alter the path shape.
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <SegmentedOption
-                      value="DEFAULT"
-                      current={orbitEccentricity}
-                      label="Default"
-                      onChange={(value) => {
-                        setOrbitEccentricity(value);
-                        queueAutosave();
-                      }}
-                    />
-                    <SegmentedOption
-                      value="SLIGHTLY_ELLIPTICAL"
-                      current={orbitEccentricity}
-                      label="Slightly Elliptical"
-                      onChange={(value) => {
-                        setOrbitEccentricity(value);
-                        queueAutosave();
-                      }}
-                    />
-                    <SegmentedOption
-                      value="VERY_ELLIPTICAL"
-                      current={orbitEccentricity}
-                      label="Very Elliptical"
-                      onChange={(value) => {
-                        setOrbitEccentricity(value);
-                        queueAutosave();
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="settings-panel rounded-[28px] border border-white/[0.06] px-5 py-6 sm:px-7 sm:py-7">
-              <div className="mb-7">
-                <p className="text-[10px] font-mono uppercase tracking-[0.38em] text-zinc-500">
-                  Visual
-                </p>
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-500">
-                  Balanced and the slider midpoint preserve the current exact visual baseline.
-                </p>
-              </div>
-
-              <div className="space-y-8">
-                <div>
-                  <h2 className="text-sm font-medium text-zinc-100">Visual Intensity</h2>
-                  <p className="mt-2 text-sm leading-7 text-zinc-500">
-                    Balanced matches the current live planet look exactly.
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <SegmentedOption value="SUBTLE" current={visualIntensity} label="Subtle" onChange={(value) => {
-                      setVisualIntensity(value);
-                      queueAutosave();
-                    }} />
-                    <SegmentedOption value="BALANCED" current={visualIntensity} label="Balanced" onChange={(value) => {
-                      setVisualIntensity(value);
-                      queueAutosave();
-                    }} />
-                    <SegmentedOption value="INTENSE" current={visualIntensity} label="Intense" onChange={(value) => {
-                      setVisualIntensity(value);
-                      queueAutosave();
-                    }} />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h2 className="text-sm font-medium text-zinc-100">Planet Size</h2>
-                      <p className="mt-2 text-sm leading-7 text-zinc-500">
-                        Midpoint equals the current default size behavior. The far left scales down to 30% of default.
-                      </p>
-                    </div>
-                    <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-zinc-600">
-                      {Math.round(planetSizeScale * 100)}%
-                    </p>
-                  </div>
-                  <div className="mt-4 rounded-[22px] border border-white/[0.05] bg-white/[0.02] p-4">
-                    <input
-                      type="range"
-                      min={30}
-                      max={170}
-                      step={1}
-                      value={Math.round(planetSizeScale * 100)}
-                      onChange={(e) => {
-                        setPlanetSizeScale(Number(e.target.value) / 100);
-                        queueAutosave();
-                      }}
-                      className="settings-range w-full"
-                    />
-                    <div className="mt-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.22em] text-zinc-600">
-                      <span>30%</span>
-                      <span>Current midpoint</span>
-                      <span>170%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+            ))}
           </div>
 
-          <aside className="settings-panel sticky top-8 h-fit rounded-[28px] border border-white/[0.06] px-5 py-6">
-            <p className="text-[10px] font-mono uppercase tracking-[0.38em] text-zinc-500">
-              Live Preview
-            </p>
-            <p className="mt-3 text-sm leading-7 text-zinc-500">
-              This preview reflects the current draft settings. Save is explicit.
-            </p>
-
-            <div className="mt-8 rounded-[24px] border border-white/[0.04] bg-black/40 p-6">
-              <div className="relative mx-auto flex h-56 w-full items-center justify-center overflow-hidden rounded-[22px] border border-white/[0.04] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_60%)]">
-                <div className="absolute h-4 w-4 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8),0_0_32px_rgba(255,255,255,0.24)]" />
+          <div className="mt-10 flex flex-col items-center text-center">
+            <div className="flex h-48 w-full max-w-[210px] items-center justify-center overflow-hidden rounded-[24px] border border-white/[0.04] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_60%)]">
+              <div className="relative h-[150px] w-[170px]">
+                <div
+                  className="absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
+                  style={{
+                    boxShadow:
+                      "0 0 4px #fff, 0 0 10px rgba(255,255,255,0.9), 0 0 24px rgba(255,255,255,0.5), 0 0 50px rgba(254,243,199,0.3), 0 0 90px rgba(103,232,249,0.12)",
+                  }}
+                />
                 <svg
                   className="absolute"
                   viewBox="0 0 100 100"
@@ -611,7 +654,7 @@ export function DomainSettingsView({
                     rx="49"
                     ry="49"
                     fill="none"
-                    stroke="rgba(103,232,249,0.08)"
+                    stroke={previewPlanetVisual.ringColor}
                     strokeWidth="1"
                     vectorEffect="non-scaling-stroke"
                   />
@@ -624,15 +667,12 @@ export function DomainSettingsView({
                     top: "50%",
                     left: "50%",
                     transform: `translate(${previewPlanetX}px, ${previewPlanetY}px) translate(-50%, -50%)`,
-                    background: `radial-gradient(circle, ${color}22 0%, transparent 72%)`,
+                    background: `radial-gradient(circle, ${withAlpha(previewPlanetVisual.color, 0.15)} 0%, transparent 72%)`,
                     filter:
-                      visualIntensity === "INTENSE"
+                      draftSettings.visualIntensity === "INTENSE"
                         ? "blur(12px)"
-                        : `blur(${8 * previewGlow}px)`,
-                    opacity:
-                      visualIntensity === "INTENSE"
-                        ? 0.98
-                        : Math.min(1, 0.72 * previewGlow),
+                        : `blur(${draftSettings.visualIntensity === "SUBTLE" ? 2 : 8}px)`,
+                    opacity: draftSettings.visualIntensity === "SUBTLE" ? 0.45 : 0.92,
                   }}
                 />
                 <div
@@ -643,43 +683,309 @@ export function DomainSettingsView({
                     top: "50%",
                     left: "50%",
                     transform: `translate(${previewPlanetX}px, ${previewPlanetY}px) translate(-50%, -50%)`,
-                    backgroundColor: color,
-                    boxShadow:
-                      visualIntensity === "INTENSE"
-                        ? `0 0 10px ${color}, 0 0 18px ${color}, 0 0 28px ${color}dd, 0 0 44px ${color}88`
-                        : `0 0 ${14 * previewGlow}px ${color}, 0 0 ${32 * previewGlow}px ${color}55`,
+                    backgroundColor: previewPlanetVisual.color,
+                    boxShadow: previewPlanetVisual.glow,
                   }}
                 />
               </div>
-
-              <div className="mt-5 space-y-3 text-[10px] font-mono uppercase tracking-[0.24em] text-zinc-600">
-                <div className="flex items-center justify-between">
-                  <span>Drift</span>
-                  <span className="text-zinc-300">
-                    {draftSettings.driftMode === "NEVER"
-                      ? "deactivated"
-                      : formatDriftThresholdLabel(draftSettings.driftThresholdHours)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Commit</span>
-                  <span className="text-zinc-300">
-                    {draftSettings.commitmentRequirement === "STANDARD"
-                      ? "standard"
-                      : "passive"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Motion</span>
-                  <span className="text-zinc-300">{draftSettings.orbitSpeed.toLowerCase()}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Visual</span>
-                  <span className="text-zinc-300">{draftSettings.visualIntensity.toLowerCase()}</span>
-                </div>
-              </div>
             </div>
-          </aside>
+
+            <p
+              className="mt-5 text-center text-lg font-semibold tracking-tight text-zinc-200"
+              style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
+            >
+              {domain.name}
+            </p>
+            <p
+              className="mt-2 text-center text-[10px] font-mono uppercase tracking-[0.38em]"
+              style={{ color: accentColor, textShadow: `0 0 14px ${withAlpha(accentColor, 0.35)}` }}
+            >
+              LIVE
+            </p>
+          </div>
+
+          <div className="mt-10 flex flex-col items-center text-center">
+            <button
+              type="button"
+              onClick={() => {
+                applySettings(defaultSettings);
+                queueAutosave();
+              }}
+              disabled={isPending && !isDirty}
+              className="inline-flex items-center justify-center rounded border border-white/[0.08] bg-white/[0.02] px-4 py-2 text-[9px] font-mono uppercase tracking-[0.22em] text-zinc-300 transition-colors hover:border-white/16 hover:bg-white/[0.04] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              Restore to defaults
+            </button>
+            {statusLabel ? (
+              <p className="mt-3 text-center text-[9px] font-mono uppercase tracking-[0.22em] text-zinc-700">
+                {statusLabel}
+              </p>
+            ) : null}
+          </div>
+        </aside>
+
+        <div className="px-5 pb-8 pt-10 sm:px-8 md:px-16 md:pt-12">
+          <div className="max-w-xl">
+            {activeTab === "behavior" ? (
+              <div>
+                <div className="mb-1 flex items-baseline gap-3">
+                  <span className="text-[9px] font-mono text-zinc-700">01</span>
+                  <p className="text-[9px] font-mono uppercase tracking-[0.5em] text-zinc-600">
+                    Behavior
+                  </p>
+                  <div className="ml-3 h-px flex-1 bg-white/[0.06]" />
+                </div>
+
+                <SettingRow
+                  label="Time Until Drift Without Commitment"
+                  detail="By default, planets drift after 72 hours without commitment. Change it only for this planet if needed."
+                >
+                  <div className="flex flex-wrap gap-1.5">
+                    {(
+                      ["24h", "48h", "72h", "96h", "7d", "never", "custom"] as DriftSelectValue[]
+                    ).map((value) => (
+                      <Pill
+                        key={value}
+                        value={value}
+                        current={driftSelect}
+                        label={value === "never" ? "Never" : value === "custom" ? "Custom" : value}
+                        accentColor={accentColor}
+                        onChange={(nextValue) => {
+                          setDriftSelect(nextValue);
+                          queueAutosave();
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  {driftSelect === "custom" ? (
+                    <div className="mt-4 rounded border border-white/[0.04] bg-white/[0.015] p-4">
+                      <div className="mb-3 flex flex-wrap gap-3">
+                        <Pill
+                          value="hours"
+                          current={customUnit}
+                          label="Hours"
+                          accentColor={accentColor}
+                          onChange={changeCustomUnit}
+                        />
+                        <Pill
+                          value="days"
+                          current={customUnit}
+                          label="Days"
+                          accentColor={accentColor}
+                          onChange={changeCustomUnit}
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={customUnit === "days" ? 7 : 168}
+                        step={1}
+                        value={customValue}
+                        onChange={(e) => {
+                          setCustomValue(Number(e.target.value));
+                          queueAutosave();
+                        }}
+                        className="settings-range w-full"
+                        style={{
+                          background: `linear-gradient(90deg, rgba(255,255,255,0.1), ${withAlpha(accentColor, 0.28)}, rgba(255,255,255,0.08))`,
+                        }}
+                      />
+                      <div className="mt-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.22em] text-zinc-600">
+                        <span>1 {customUnit === "days" ? "day" : "hour"}</span>
+                        <span>
+                          {customValue} {customUnit}
+                        </span>
+                        <span>
+                          {customUnit === "days" ? "7 days" : "168 hours"}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+                </SettingRow>
+
+                <SettingRow
+                  label="Commitment Requirement"
+                  detail="Standard preserves the current app behavior. Passive counts reaching the commit section as a recommit."
+                >
+                  <div className="flex flex-wrap gap-2">
+                    <Pill
+                      value="STANDARD"
+                      current={commitmentRequirement}
+                      label="Standard"
+                      accentColor={accentColor}
+                      onChange={(value) => {
+                        setCommitmentRequirement(value);
+                        queueAutosave();
+                      }}
+                    />
+                    <Pill
+                      value="PASSIVE_ALIGNMENT"
+                      current={commitmentRequirement}
+                      label="Passive"
+                      accentColor={accentColor}
+                      onChange={(value) => {
+                        setCommitmentRequirement(value);
+                        queueAutosave();
+                      }}
+                    />
+                  </div>
+                </SettingRow>
+              </div>
+            ) : null}
+
+            {activeTab === "motion" ? (
+              <div>
+                <div className="mb-1 flex items-baseline gap-3">
+                  <span className="text-[9px] font-mono text-zinc-700">02</span>
+                  <p className="text-[9px] font-mono uppercase tracking-[0.5em] text-zinc-600">
+                    Motion
+                  </p>
+                  <div className="ml-3 h-px flex-1 bg-white/[0.06]" />
+                </div>
+
+                <SettingRow
+                  label="Orbit Speed"
+                  detail="Standard equals the current Axis motion. Other options layer on top of that base behavior."
+                >
+                  <div className="flex flex-wrap gap-2">
+                    {(["STILL", "SLOW", "STANDARD", "FAST"] as const).map((value) => (
+                      <Pill
+                        key={value}
+                        value={value}
+                        current={orbitSpeed}
+                        label={value.toLowerCase()}
+                        accentColor={accentColor}
+                        onChange={(nextValue) => {
+                          setOrbitSpeed(nextValue);
+                          queueAutosave();
+                        }}
+                      />
+                    ))}
+                  </div>
+                </SettingRow>
+
+                <SettingRow
+                  label="Orbit Eccentricity"
+                  detail="Default preserves the current orbit shape. Elliptical modes only alter the path shape."
+                >
+                  <div className="flex flex-wrap gap-2">
+                    <Pill
+                      value="DEFAULT"
+                      current={orbitEccentricity}
+                      label="Default"
+                      accentColor={accentColor}
+                      onChange={(value) => {
+                        setOrbitEccentricity(value);
+                        queueAutosave();
+                      }}
+                    />
+                    <Pill
+                      value="SLIGHTLY_ELLIPTICAL"
+                      current={orbitEccentricity}
+                      label="Slightly elliptical"
+                      accentColor={accentColor}
+                      onChange={(value) => {
+                        setOrbitEccentricity(value);
+                        queueAutosave();
+                      }}
+                    />
+                    <Pill
+                      value="VERY_ELLIPTICAL"
+                      current={orbitEccentricity}
+                      label="Very elliptical"
+                      accentColor={accentColor}
+                      onChange={(value) => {
+                        setOrbitEccentricity(value);
+                        queueAutosave();
+                      }}
+                    />
+                  </div>
+                </SettingRow>
+              </div>
+            ) : null}
+
+            {activeTab === "visual" ? (
+              <div>
+                <div className="mb-1 flex items-baseline gap-3">
+                  <span className="text-[9px] font-mono text-zinc-700">03</span>
+                  <p className="text-[9px] font-mono uppercase tracking-[0.5em] text-zinc-600">
+                    Visual
+                  </p>
+                  <div className="ml-3 h-px flex-1 bg-white/[0.06]" />
+                </div>
+
+                <SettingRow
+                  label="Visual Intensity"
+                  detail="Balanced matches the current live planet look exactly."
+                >
+                  <div className="flex flex-wrap gap-2">
+                    <Pill
+                      value="SUBTLE"
+                      current={visualIntensity}
+                      label="Subtle"
+                      accentColor={accentColor}
+                      onChange={(value) => {
+                        setVisualIntensity(value);
+                        queueAutosave();
+                      }}
+                    />
+                    <Pill
+                      value="BALANCED"
+                      current={visualIntensity}
+                      label="Balanced"
+                      accentColor={accentColor}
+                      onChange={(value) => {
+                        setVisualIntensity(value);
+                        queueAutosave();
+                      }}
+                    />
+                    <Pill
+                      value="INTENSE"
+                      current={visualIntensity}
+                      label="Intense"
+                      accentColor={accentColor}
+                      onChange={(value) => {
+                        setVisualIntensity(value);
+                        queueAutosave();
+                      }}
+                    />
+                  </div>
+                </SettingRow>
+
+                <SettingRow
+                  label="Planet Size"
+                  detail="Midpoint equals the current default size behavior. The far left scales down to 30% of default."
+                >
+                    <div>
+                      <div className="mb-3 flex items-center justify-between">
+                        <span className="text-[10px] font-mono text-zinc-600">30%</span>
+                      <span className="text-[11px] font-mono" style={{ color: accentColor }}>
+                        {Math.round(planetSizeScale * 100)}%
+                      </span>
+                      <span className="text-[10px] font-mono text-zinc-600">170%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={30}
+                      max={170}
+                      step={1}
+                      value={Math.round(planetSizeScale * 100)}
+                      onChange={(e) => {
+                        setPlanetSizeScale(Number(e.target.value) / 100);
+                        queueAutosave();
+                      }}
+                      className="settings-range w-full"
+                      style={{
+                        accentColor: accentColor,
+                        background: `linear-gradient(90deg, rgba(255,255,255,0.1), ${withAlpha(accentColor, 0.28)}, rgba(255,255,255,0.08))`,
+                      }}
+                    />
+                  </div>
+                </SettingRow>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </main>
