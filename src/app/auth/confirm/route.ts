@@ -3,8 +3,28 @@ import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function requireSupabaseEnv(
+  value: string | undefined,
+  name: "NEXT_PUBLIC_SUPABASE_URL" | "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+) {
+  if (!value) {
+    throw new Error(`Missing ${name} for Supabase auth confirmation.`);
+  }
+
+  return value;
+}
+
 function getSafeNextPath(next: string | null) {
   return next && next.startsWith("/") ? next : "/";
+}
+
+function createRedirectResponse(url: URL) {
+  const response = NextResponse.redirect(url, { status: 303 });
+  response.headers.set("Cache-Control", "no-store");
+  return response;
 }
 
 export async function GET(request: NextRequest) {
@@ -13,12 +33,21 @@ export async function GET(request: NextRequest) {
   const tokenHash = requestUrl.searchParams.get("token_hash");
   const type = requestUrl.searchParams.get("type");
   const next = getSafeNextPath(requestUrl.searchParams.get("next"));
+  const redirectUrl = new URL(next, requestUrl.origin);
 
-  let response = NextResponse.redirect(new URL(next, requestUrl.origin));
+  let response = createRedirectResponse(redirectUrl);
+  const supabaseUrl = requireSupabaseEnv(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    "NEXT_PUBLIC_SUPABASE_URL",
+  );
+  const supabaseAnonKey = requireSupabaseEnv(
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  );
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
@@ -35,7 +64,7 @@ export async function GET(request: NextRequest) {
             request.cookies.set(name, value);
           });
 
-          response = NextResponse.redirect(new URL(next, requestUrl.origin));
+          response = createRedirectResponse(redirectUrl);
 
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
@@ -60,7 +89,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(
+  return createRedirectResponse(
     new URL("/login?error=confirmation_failed", requestUrl.origin),
   );
 }
