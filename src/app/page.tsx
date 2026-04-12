@@ -6,7 +6,7 @@ import {
   type DomainListItem,
 } from "@/lib/get-data";
 import { normalizeDomainSettings } from "@/lib/domain-settings";
-import { DEMO_DOMAINS } from "@/lib/demo-data";
+import { getPublicDemoOrrery } from "@/lib/get-public-demo";
 import { restoreLegacyIfNeededForCurrentUser } from "@/lib/restore-legacy";
 import { getSupabaseUser } from "@/lib/supabase-auth";
 import { Orrery } from "./Orrery";
@@ -47,9 +47,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const { demo, pulseDomain } = await searchParams;
 
   if (!user) {
+    const demoDomains = await getPublicDemoOrrery();
+
     return (
       <Orrery
-        domains={DEMO_DOMAINS}
+        domains={demoDomains}
         isDemo
         returnPulseDomainId={pulseDomain ?? null}
       />
