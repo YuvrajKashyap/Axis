@@ -1,7 +1,7 @@
 'use server';
 
 import { scheduleDomainDriftWarning } from "@/lib/drift-warning";
-import { prisma } from "@/lib/prisma";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getAuthorizedTargetUserId } from "@/lib/target-user";
 import { revalidatePath } from "next/cache";
 
@@ -36,10 +36,17 @@ export async function updateDomainStatus(
     return;
   }
 
-  await prisma.domain.updateMany({
-    where: { id: domainId, userId },
-    data: { status },
-  });
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .schema("axis")
+    .from("domains")
+    .update({ status })
+    .eq("id", domainId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(`Failed to update domain status: ${error.message}`);
+  }
 
   await scheduleDomainDriftWarningSafely(domainId);
   revalidatePath("/");
@@ -55,10 +62,17 @@ export async function updateDomainColor(
     return;
   }
 
-  await prisma.domain.updateMany({
-    where: { id: domainId, userId },
-    data: { color },
-  });
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .schema("axis")
+    .from("domains")
+    .update({ color })
+    .eq("id", domainId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(`Failed to update domain color: ${error.message}`);
+  }
   revalidatePath("/");
 }
 
@@ -82,22 +96,35 @@ export async function createCommitment(
       return { success: false, error: "Not signed in." };
     }
 
-    const domain = await prisma.domain.findFirst({
-      where: { id: domainId, userId },
-      select: { id: true },
-    });
+    const supabase = await createSupabaseServerClient();
+    const { data: domain, error: domainError } = await supabase
+      .schema("axis")
+      .from("domains")
+      .select("id")
+      .eq("id", domainId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (domainError) {
+      return { success: false, error: "Failed to load domain." };
+    }
 
     if (!domain) {
       return { success: false, error: "Domain not found." };
     }
 
-    await prisma.commitment.create({
-      data: {
-        domainId: domain.id,
+    const { error: insertError } = await supabase
+      .schema("axis")
+      .from("commitments")
+      .insert({
+        domain_id: domain.id,
         text: trimmedText,
-        userId,
-      },
-    });
+        user_id: userId,
+      });
+
+    if (insertError) {
+      return { success: false, error: "Failed to create commitment." };
+    }
 
     await scheduleDomainDriftWarningSafely(domain.id);
     revalidatePath("/");
@@ -119,24 +146,35 @@ export async function recordPassiveAlignmentTouch(
     return { success: false };
   }
 
-  const domain = await prisma.domain.findFirst({
-    where: { id: domainId, userId },
-    select: {
-      id: true,
-      commitmentRequirement: true,
-    },
-  });
+  const supabase = await createSupabaseServerClient();
+  const { data: domain, error: domainError } = await supabase
+    .schema("axis")
+    .from("domains")
+    .select("id, commitment_requirement")
+    .eq("id", domainId)
+    .eq("user_id", userId)
+    .maybeSingle();
 
-  if (!domain || domain.commitmentRequirement !== "PASSIVE_ALIGNMENT") {
+  if (domainError) {
     return { success: false };
   }
 
-  await prisma.domain.updateMany({
-    where: { id: domain.id, userId },
-    data: {
-      lastPassiveAlignmentAt: new Date(),
-    },
-  });
+  if (!domain || domain.commitment_requirement !== "PASSIVE_ALIGNMENT") {
+    return { success: false };
+  }
+
+  const { error: updateError } = await supabase
+    .schema("axis")
+    .from("domains")
+    .update({
+      last_passive_alignment_at: new Date().toISOString(),
+    })
+    .eq("id", domain.id)
+    .eq("user_id", userId);
+
+  if (updateError) {
+    return { success: false };
+  }
 
   await scheduleDomainDriftWarningSafely(domain.id);
   revalidatePath("/");
@@ -152,19 +190,23 @@ export async function loadAllCommitments(
     return [];
   }
 
-  const commitments = await prisma.commitment.findMany({
-    where: { domainId, userId },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      text: true,
-      createdAt: true,
-    },
-  });
+  const supabase = await createSupabaseServerClient();
+  const { data: commitments, error } = await supabase
+    .schema("axis")
+    .from("commitments")
+    .select("id, text, created_at")
+    .eq("domain_id", domainId)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error || !commitments) {
+    return [];
+  }
 
   return commitments.map((commitment) => ({
-    ...commitment,
-    createdAt: commitment.createdAt.toISOString(),
+    id: commitment.id,
+    text: commitment.text,
+    createdAt: commitment.created_at,
   }));
 }
 
@@ -174,9 +216,17 @@ export async function clearCommitments(domainId: string, targetUserId?: string) 
     return;
   }
 
-  await prisma.commitment.deleteMany({
-    where: { domainId, userId },
-  });
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .schema("axis")
+    .from("commitments")
+    .delete()
+    .eq("domain_id", domainId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(`Failed to clear commitments: ${error.message}`);
+  }
   revalidatePath("/");
 }
 
@@ -186,8 +236,28 @@ export async function deleteDomain(domainId: string, targetUserId?: string) {
     return;
   }
 
-  await prisma.commitment.deleteMany({ where: { domainId, userId } });
-  await prisma.domain.deleteMany({ where: { id: domainId, userId } });
+  const supabase = await createSupabaseServerClient();
+  const { error: commitmentsError } = await supabase
+    .schema("axis")
+    .from("commitments")
+    .delete()
+    .eq("domain_id", domainId)
+    .eq("user_id", userId);
+
+  if (commitmentsError) {
+    throw new Error(`Failed to delete commitments: ${commitmentsError.message}`);
+  }
+
+  const { error: domainError } = await supabase
+    .schema("axis")
+    .from("domains")
+    .delete()
+    .eq("id", domainId)
+    .eq("user_id", userId);
+
+  if (domainError) {
+    throw new Error(`Failed to delete domain: ${domainError.message}`);
+  }
   revalidatePath("/");
 }
 
@@ -207,21 +277,28 @@ export async function updateDomainName(
 
   if (!slug) return;
 
-  const existing = await prisma.domain.findFirst({
-    where: {
-      userId,
-      slug,
-      NOT: { id: domainId },
-    },
-    select: { id: true },
-  });
+  const supabase = await createSupabaseServerClient();
+  const { data: existing, error: existingError } = await supabase
+    .schema("axis")
+    .from("domains")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("slug", slug)
+    .neq("id", domainId)
+    .maybeSingle();
+
+  if (existingError) return;
 
   if (existing) return;
 
-  await prisma.domain.updateMany({
-    where: { id: domainId, userId },
-    data: { name: trimmed, slug },
-  });
+  const { error } = await supabase
+    .schema("axis")
+    .from("domains")
+    .update({ name: trimmed, slug })
+    .eq("id", domainId)
+    .eq("user_id", userId);
+
+  if (error) return;
   revalidatePath("/");
 }
 
@@ -240,9 +317,36 @@ export async function updateDomainFields(
     return;
   }
 
-  await prisma.domain.updateMany({
-    where: { id: domainId, userId },
-    data: fields,
-  });
+  const update: {
+    identity?: string;
+    vision?: string;
+    primary_reason?: string;
+    primary_cost?: string;
+  } = {};
+
+  if (fields.identity !== undefined) update.identity = fields.identity;
+  if (fields.vision !== undefined) update.vision = fields.vision;
+  if (fields.primaryReason !== undefined) {
+    update.primary_reason = fields.primaryReason;
+  }
+  if (fields.primaryCost !== undefined) {
+    update.primary_cost = fields.primaryCost;
+  }
+
+  if (Object.keys(update).length === 0) {
+    return;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .schema("axis")
+    .from("domains")
+    .update(update)
+    .eq("id", domainId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(`Failed to update domain fields: ${error.message}`);
+  }
   revalidatePath("/");
 }
