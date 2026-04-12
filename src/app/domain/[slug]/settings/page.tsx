@@ -1,7 +1,8 @@
-import { auth } from "@/lib/auth";
 import { normalizeDomainSettings } from "@/lib/domain-settings";
 import { isAdmin } from "@/lib/get-data";
-import { prisma } from "@/lib/prisma";
+import { restoreLegacyIfNeededForCurrentUser } from "@/lib/restore-legacy";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { requireSupabaseUser } from "@/lib/supabase-auth";
 import { notFound, redirect } from "next/navigation";
 import { DomainSettingsView } from "./DomainSettingsView";
 
@@ -11,40 +12,57 @@ type DomainSettingsPageProps = {
 };
 
 async function getDomainSettingsDetail(userId: string, slug: string) {
-  return prisma.domain.findUnique({
-    where: { userId_slug: { userId, slug } },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      color: true,
-      positionX: true,
-      driftMode: true,
-      driftThresholdHours: true,
-      commitmentRequirement: true,
-      orbitSpeed: true,
-      visualIntensity: true,
-      planetSizeScale: true,
-      orbitEccentricity: true,
-    },
-  });
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .schema("axis")
+    .from("domains")
+    .select(
+      "id,name,slug,color,position_x,drift_mode,drift_threshold_hours,commitment_requirement,orbit_speed,visual_intensity,planet_size_scale,orbit_eccentricity",
+    )
+    .eq("user_id", userId)
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load domain settings: ${error.message}`);
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    slug: data.slug,
+    color: data.color,
+    positionX: data.position_x,
+    driftMode: data.drift_mode,
+    driftThresholdHours: data.drift_threshold_hours,
+    commitmentRequirement: data.commitment_requirement,
+    orbitSpeed: data.orbit_speed,
+    visualIntensity: data.visual_intensity,
+    planetSizeScale: data.planet_size_scale,
+    orbitEccentricity: data.orbit_eccentricity,
+  };
 }
 
 export default async function DomainSettingsPage({
   params,
   searchParams,
 }: DomainSettingsPageProps) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const user = await requireSupabaseUser();
 
   const { slug } = await params;
   const { align, idx, demoUser } = await searchParams;
 
-  let targetUserId = session.user.id;
+  let targetUserId = user.id;
   if (demoUser) {
-    const admin = await isAdmin(session.user.email);
+    const admin = await isAdmin(user.email);
     if (!admin) redirect("/");
     targetUserId = demoUser;
+  } else {
+    await restoreLegacyIfNeededForCurrentUser();
   }
 
   const domain = await getDomainSettingsDetail(targetUserId, slug);
