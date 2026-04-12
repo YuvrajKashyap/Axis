@@ -1,13 +1,14 @@
 import { Client, Receiver } from "@upstash/qstash";
 import { computeDriftState } from "@/lib/drift";
 import {
+  DEFAULT_DOMAIN_SETTINGS,
   DRIFT_WARNING_LEAD_HOURS,
   getEffectiveDriftThresholdHours,
   type DomainCommitmentRequirementValue,
   type DomainDriftModeValue,
 } from "@/lib/domain-settings";
-import { DEMO_EMAIL } from "@/lib/get-data";
-import { prisma } from "@/lib/prisma";
+import { DEMO_USER_ID } from "@/lib/get-data";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { Resend } from "resend";
 
 const DRIFT_WARNING_TOLERANCE_MS = 90 * 60 * 1000;
@@ -28,6 +29,7 @@ type DriftWarningPayload = {
   domainId: string;
   expectedWarningAt: string;
   expectedActivityAt: string;
+  recipientEmail?: string;
 };
 
 type DomainWarningContext = {
@@ -42,47 +44,111 @@ type DomainWarningContext = {
   lastPassiveAlignmentAt: Date | null;
   lastDriftWarningSentAt: Date | null;
   lastDriftWarningActivityAt: Date | null;
-  user: {
-    email: string;
-  };
+  recipientEmail: string | null;
   commitments: {
     createdAt: Date;
     text: string;
   }[];
 };
 
+type DomainWarningRow = {
+  id: string;
+  name: string;
+  slug: string;
+  status: "ALIGNED" | "NEUTRAL" | "DRIFTING" | "ARCHIVED";
+  user_id: string;
+  drift_mode: DomainDriftModeValue | null;
+  drift_threshold_hours: number | null;
+  commitment_requirement: DomainCommitmentRequirementValue | null;
+  last_passive_alignment_at: string | null;
+  last_drift_warning_sent_at: string | null;
+  last_drift_warning_activity_at: string | null;
+};
+
+type CommitmentRow = {
+  created_at: string;
+  text: string;
+};
+
+function toDate(value: string | null): Date | null {
+  return value ? new Date(value) : null;
+}
+
+async function getCurrentAuthenticatedEmailForUserId(userId: string) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user || user.id !== userId || !user.email) {
+    return null;
+  }
+
+  return user.email;
+}
+
 async function getDomainWarningContext(
   domainId: string,
+  recipientEmailHint?: string | null,
 ): Promise<DomainWarningContext | null> {
-  return prisma.domain.findUnique({
-    where: { id: domainId },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      status: true,
-      userId: true,
-      driftMode: true,
-      driftThresholdHours: true,
-      commitmentRequirement: true,
-      lastPassiveAlignmentAt: true,
-      lastDriftWarningSentAt: true,
-      lastDriftWarningActivityAt: true,
-      user: {
-        select: {
-          email: true,
-        },
-      },
-      commitments: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: {
-          createdAt: true,
-          text: true,
-        },
-      },
-    },
-  });
+  const supabase = await createSupabaseServerClient();
+  const { data: domain, error: domainError } = await supabase
+    .schema("axis")
+    .from("domains")
+    .select(
+      "id, name, slug, status, user_id, drift_mode, drift_threshold_hours, commitment_requirement, last_passive_alignment_at, last_drift_warning_sent_at, last_drift_warning_activity_at",
+    )
+    .eq("id", domainId)
+    .maybeSingle<DomainWarningRow>();
+
+  if (domainError) {
+    throw new Error(`Failed to load drift warning domain: ${domainError.message}`);
+  }
+
+  if (!domain) {
+    return null;
+  }
+
+  const { data: commitments, error: commitmentsError } = await supabase
+    .schema("axis")
+    .from("commitments")
+    .select("created_at, text")
+    .eq("domain_id", domainId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (commitmentsError) {
+    throw new Error(
+      `Failed to load drift warning commitments: ${commitmentsError.message}`,
+    );
+  }
+
+  const recipientEmail =
+    recipientEmailHint ??
+    (await getCurrentAuthenticatedEmailForUserId(domain.user_id));
+
+  return {
+    id: domain.id,
+    name: domain.name,
+    slug: domain.slug,
+    status: domain.status,
+    userId: domain.user_id,
+    driftMode: domain.drift_mode ?? DEFAULT_DOMAIN_SETTINGS.driftMode,
+    driftThresholdHours:
+      domain.drift_threshold_hours ??
+      DEFAULT_DOMAIN_SETTINGS.driftThresholdHours,
+    commitmentRequirement:
+      domain.commitment_requirement ??
+      DEFAULT_DOMAIN_SETTINGS.commitmentRequirement,
+    lastPassiveAlignmentAt: toDate(domain.last_passive_alignment_at),
+    lastDriftWarningSentAt: toDate(domain.last_drift_warning_sent_at),
+    lastDriftWarningActivityAt: toDate(domain.last_drift_warning_activity_at),
+    recipientEmail,
+    commitments: ((commitments ?? []) as CommitmentRow[]).map((commitment) => ({
+      createdAt: new Date(commitment.created_at),
+      text: commitment.text,
+    })),
+  };
 }
 
 function buildWarningPayload(
@@ -111,7 +177,7 @@ function buildWarningPayload(
     domain.status !== "ARCHIVED" &&
     domain.status !== "DRIFTING" &&
     !driftState.autoDrifted &&
-    domain.user.email !== DEMO_EMAIL;
+    domain.userId !== DEMO_USER_ID;
 
   const warningAt =
     warningEligible && driftState.nextDriftAt
@@ -146,6 +212,9 @@ async function sendDriftWarningEmail(domain: DomainWarningContext) {
   if (!process.env.RESEND_FROM_EMAIL) {
     return { sent: false, reason: "resend-from-missing" as const };
   }
+  if (!domain.recipientEmail) {
+    return { sent: false, reason: "recipient-email-missing" as const };
+  }
 
   const latestCommitmentText = domain.commitments[0]?.text?.trim() || null;
   const domainUrl = buildDomainUrl(domain.slug);
@@ -158,7 +227,7 @@ async function sendDriftWarningEmail(domain: DomainWarningContext) {
 
   const { error } = await resendClient.emails.send({
     from: process.env.RESEND_FROM_EMAIL,
-    to: [domain.user.email],
+    to: [domain.recipientEmail],
     subject: `Axis: ${domain.name} drifts in 12 hours`,
     html: `
       <div style="background:#09090b;color:#f4f4f5;padding:32px;font-family:Inter,Helvetica,Arial,sans-serif;">
@@ -196,7 +265,10 @@ export async function processDomainDriftWarning(
   payload: DriftWarningPayload,
   options: { bypassTimingTolerance?: boolean } = {},
 ) {
-  const domain = await getDomainWarningContext(payload.domainId);
+  const domain = await getDomainWarningContext(
+    payload.domainId,
+    payload.recipientEmail ?? null,
+  );
   if (!domain) {
     return { sent: false, reason: "domain-not-found" as const };
   }
@@ -239,13 +311,22 @@ export async function processDomainDriftWarning(
     return sendResult;
   }
 
-  await prisma.domain.update({
-    where: { id: domain.id },
-    data: {
-      lastDriftWarningSentAt: new Date(nowMs),
-      lastDriftWarningActivityAt: currentActivityAt,
-    },
-  });
+  const supabase = await createSupabaseServerClient();
+  const { error: updateError } = await supabase
+    .schema("axis")
+    .from("domains")
+    .update({
+      last_drift_warning_sent_at: new Date(nowMs).toISOString(),
+      last_drift_warning_activity_at: currentActivityAt.toISOString(),
+    })
+    .eq("id", domain.id)
+    .eq("user_id", domain.userId);
+
+  if (updateError) {
+    throw new Error(
+      `Failed to persist drift warning metadata: ${updateError.message}`,
+    );
+  }
 
   return { sent: true as const };
 }
@@ -274,6 +355,7 @@ export async function scheduleDomainDriftWarning(domainId: string) {
     domainId: domain.id,
     expectedWarningAt: warning.warningAt.toISOString(),
     expectedActivityAt: currentActivityAt.toISOString(),
+    ...(domain.recipientEmail ? { recipientEmail: domain.recipientEmail } : {}),
   };
 
   if (warning.warningAt.getTime() <= nowMs) {
