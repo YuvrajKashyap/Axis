@@ -266,6 +266,7 @@ export function DomainView({
   const { r, g, b } = hexToRgb(color);
   const [mounted, setMounted] = useState(false);
   const [text, setText] = useState("");
+  const [commitError, setCommitError] = useState("");
   const [isPending, startTransition] = useTransition();
   const [showHistory, setShowHistory] = useState(false);
   const [historyItems, setHistoryItems] = useState(commitments);
@@ -435,9 +436,15 @@ export function DomainView({
 
   const handleCommit = useCallback(() => {
     if (!text.trim()) return;
+    setCommitError("");
     startTransition(async () => {
-      const result = await createCommitment(domain.id, text.trim(), demoUser);
-      if (result.success) {
+      try {
+        const result = await createCommitment(domain.id, text.trim(), demoUser);
+        if (!result.success) {
+          setCommitError(result.error || "Failed to create commitment.");
+          return;
+        }
+
         const postCommitHref = getPostCommitHref();
         router.prefetch(postCommitHref);
         clearQuoteTimers();
@@ -457,6 +464,8 @@ export function DomainView({
             setQuoteOverlay(false);
           }, QUOTE_FALLBACK_CLEAR_DELAY_MS),
         ];
+      } catch {
+        setCommitError("Failed to create commitment.");
       }
     });
   }, [clearQuoteTimers, demoUser, domain.id, getPostCommitHref, navigateAfterCommit, router, startTransition, text]);
@@ -989,13 +998,21 @@ export function DomainView({
             <input
               type="text"
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                if (commitError) setCommitError("");
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && text.trim()) handleCommit();
               }}
               placeholder="Today I will..."
               className="w-full bg-transparent text-center text-lg text-white outline-none border-b border-zinc-800 pb-4 placeholder:text-zinc-800 focus:border-zinc-600 transition-colors"
             />
+            {commitError && (
+              <p className="mt-4 text-center text-xs font-mono text-red-400/80">
+                {commitError}
+              </p>
+            )}
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
               {isAligning && (

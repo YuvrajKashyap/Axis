@@ -98,7 +98,8 @@ export async function restoreLegacyIfNeededForCurrentUser(): Promise<RestoreLega
       return { restored: false, reason: "no_legacy_match" };
     }
 
-    throw new Error(`Failed to restore legacy Axis data: ${error.message}`);
+    console.error("Legacy restore RPC failed", error);
+    return { restored: false, reason: "rpc-noop" };
   }
 
   if (matchesNoLegacyMatch(data)) {
@@ -111,7 +112,11 @@ export async function restoreLegacyIfNeededForCurrentUser(): Promise<RestoreLega
   }
 
   if (payloadError) {
-    throw new Error(payloadError);
+    console.error("Legacy restore RPC returned an unexpected payload error", {
+      payloadError,
+      data,
+    });
+    return { restored: false, reason: "rpc-noop" };
   }
 
   if (data == null) {
