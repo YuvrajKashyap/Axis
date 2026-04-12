@@ -1,19 +1,19 @@
-import { auth } from "@/lib/auth";
 import { getOrCreateDemoUserId, isAdmin } from "@/lib/get-data";
+import { getSupabaseUser } from "@/lib/supabase-auth";
 
 export async function getAuthorizedTargetUserId(targetUserId?: string) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const user = await getSupabaseUser();
+  if (!user?.id) {
     return null;
   }
 
-  const sessionUserId = session.user.id;
+  const sessionUserId = user.id;
 
   if (!targetUserId || targetUserId === sessionUserId) {
     return sessionUserId;
   }
 
-  const admin = await isAdmin(session.user.email);
+  const admin = await isAdmin(user.email);
   if (!admin) {
     return null;
   }
