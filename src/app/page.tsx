@@ -1,16 +1,15 @@
 import {
   getDomains,
-  getDemoDomains,
-  isAdmin,
   getOrCreateDemoUserId,
+  isAdmin,
   type DomainList,
   type DomainListItem,
 } from "@/lib/get-data";
-import { auth } from "@/lib/auth";
+import { normalizeDomainSettings } from "@/lib/domain-settings";
+import { restoreLegacyIfNeededForCurrentUser } from "@/lib/restore-legacy";
+import { getSupabaseUser } from "@/lib/supabase-auth";
 import { Orrery } from "./Orrery";
 import type { DomainData } from "./Orrery";
-import { DEMO_DOMAINS } from "@/lib/demo-data";
-import { normalizeDomainSettings } from "@/lib/domain-settings";
 
 function toOrreryData(domains: DomainList): DomainData[] {
   return domains.map((domain: DomainListItem) => ({
@@ -43,30 +42,57 @@ type HomePageProps = {
 };
 
 export default async function HomePage({ searchParams }: HomePageProps) {
-  const session = await auth();
+  const user = await getSupabaseUser();
   const { demo, pulseDomain } = await searchParams;
 
-  // Not logged in: show demo orrery (from DB), fall back to hardcoded
-  if (!session?.user?.id) {
-    const demoDomains = await getDemoDomains();
-    if (demoDomains && demoDomains.length > 0) {
-      return <Orrery domains={toOrreryData(demoDomains)} isDemo returnPulseDomainId={pulseDomain ?? null} />;
-    }
-    return <Orrery domains={DEMO_DOMAINS} isDemo returnPulseDomainId={pulseDomain ?? null} />;
+  if (!user) {
+    const demoUserId = process.env.DEMO_USER_ID?.trim();
+    const demoDomains = demoUserId
+      ? await getDomains(demoUserId, { disableAutoDrift: true })
+      : [];
+
+    return (
+      <Orrery
+        domains={toOrreryData(demoDomains)}
+        isDemo
+        returnPulseDomainId={pulseDomain ?? null}
+      />
+    );
   }
 
-  const admin = await isAdmin(session.user.email);
+  const admin = await isAdmin(user.email);
 
   // Admin editing demo mode: load demo user's domains, fully editable
   if (admin && demo === "edit") {
     const demoUserId = await getOrCreateDemoUserId();
     if (demoUserId) {
-      const demoDomains = await getDomains(demoUserId, { disableAutoDrift: true });
-      return <Orrery domains={toOrreryData(demoDomains)} isAdmin editingDemo demoUserId={demoUserId} returnPulseDomainId={pulseDomain ?? null} />;
+      const demoDomains = await getDomains(demoUserId, {
+        disableAutoDrift: true,
+      });
+      return (
+        <Orrery
+          domains={toOrreryData(demoDomains)}
+          isAdmin
+          editingDemo
+          demoUserId={demoUserId}
+          returnPulseDomainId={pulseDomain ?? null}
+        />
+      );
     }
+
+    console.warn(
+      "Admin demo edit mode is unavailable because DEMO_USER_ID is not configured.",
+    );
   }
 
   // Normal logged-in user: show their own orrery
-  const domains = await getDomains(session.user.id);
-  return <Orrery domains={toOrreryData(domains)} isAdmin={admin} returnPulseDomainId={pulseDomain ?? null} />;
+  await restoreLegacyIfNeededForCurrentUser();
+  const domains = await getDomains(user.id);
+  return (
+    <Orrery
+      domains={toOrreryData(domains)}
+      isAdmin={admin}
+      returnPulseDomainId={pulseDomain ?? null}
+    />
+  );
 }
