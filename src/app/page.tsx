@@ -6,6 +6,7 @@ import {
   type DomainListItem,
 } from "@/lib/get-data";
 import { normalizeDomainSettings } from "@/lib/domain-settings";
+import { DEMO_DOMAINS } from "@/lib/demo-data";
 import { restoreLegacyIfNeededForCurrentUser } from "@/lib/restore-legacy";
 import { getSupabaseUser } from "@/lib/supabase-auth";
 import { Orrery } from "./Orrery";
@@ -47,13 +48,27 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   if (!user) {
     const demoUserId = process.env.DEMO_USER_ID?.trim();
-    const demoDomains = demoUserId
-      ? await getDomains(demoUserId, { disableAutoDrift: true })
-      : [];
+    let publicDemoDomains = DEMO_DOMAINS;
+
+    if (demoUserId) {
+      try {
+        const demoDomains = await getDomains(demoUserId, {
+          disableAutoDrift: true,
+        });
+
+        if (demoDomains.length > 0) {
+          publicDemoDomains = toOrreryData(demoDomains);
+        }
+      } catch (error) {
+        console.error("Failed to load live demo domains, using fallback demo.", {
+          error,
+        });
+      }
+    }
 
     return (
       <Orrery
-        domains={toOrreryData(demoDomains)}
+        domains={publicDemoDomains}
         isDemo
         returnPulseDomainId={pulseDomain ?? null}
       />
