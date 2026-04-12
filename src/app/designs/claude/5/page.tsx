@@ -4,8 +4,7 @@ import {
   type DomainListItem,
   type DomainListStatus,
 } from "@/lib/get-data";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { requireSupabaseUser } from "@/lib/supabase-auth";
 import Link from "next/link";
 
 const stampConfig: Record<DomainListStatus, { label: string; cls: string; border: string }> = {
@@ -41,10 +40,8 @@ const stampConfig: Record<DomainListStatus, { label: string; cls: string; border
 // Unlike every other design here — deliberately bureaucratic and heavy.
 
 export default async function Design5() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
-  const domains: DomainList = await getDomains(session.user.id);
+  const user = await requireSupabaseUser();
+  const domains: DomainList = await getDomains(user.id);
 
   const caseYear = new Date().getFullYear();
 

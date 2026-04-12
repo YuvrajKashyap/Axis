@@ -1,13 +1,10 @@
 import { getDomains, type DomainList, type DomainListItem } from "@/lib/get-data";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { requireSupabaseUser } from "@/lib/supabase-auth";
 import Link from "next/link";
 
 export default async function VectorDesign() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
-  const domains: DomainList = await getDomains(session.user.id);
+  const user = await requireSupabaseUser();
+  const domains: DomainList = await getDomains(user.id);
 
   return (
     <main className="min-h-screen bg-[#020202] text-zinc-300 font-mono text-[10px] overflow-hidden selection:bg-zinc-800 selection:text-white antialiased">
