@@ -5,6 +5,25 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signup, login } from "@/lib/auth-actions";
 
+function EyeIcon({ visible }: { visible: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" />
+      <circle cx="12" cy="12" r="3" />
+      {visible ? null : <path d="M4 4 20 20" />}
+    </svg>
+  );
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -13,17 +32,28 @@ export default function LoginPage() {
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
+  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showSignupPasswordConfirm, setShowSignupPasswordConfirm] =
+    useState(false);
   const [signupError, setSignupError] = useState("");
   const [signupMessage, setSignupMessage] = useState("");
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
 
   function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     setSignupError("");
     setSignupMessage("");
+
+    if (signupPassword !== signupPasswordConfirm) {
+      setSignupError("Passwords do not match.");
+      return;
+    }
+
     startTransition(async () => {
       const result = await signup(signupName, signupEmail, signupPassword);
       if (result.success && !result.pendingVerification) {
@@ -55,6 +85,9 @@ export default function LoginPage() {
     "w-full bg-zinc-900/50 border border-zinc-800 focus:border-zinc-600 outline-none px-4 py-3 text-sm text-zinc-200 rounded-lg transition-colors font-mono placeholder:text-zinc-700";
   const labelClass =
     "block text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-500 mb-2";
+  const passwordInputClass = `${inputClass} pr-14`;
+  const eyeButtonClass =
+    "absolute inset-y-0 right-0 flex items-center px-4 text-zinc-600 transition-colors hover:text-zinc-300";
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center bg-black text-zinc-200">
@@ -127,15 +160,59 @@ export default function LoginPage() {
                 </div>
                 <div>
                   <label className={labelClass}>Password</label>
-                  <input
-                    type="password"
-                    value={signupPassword}
-                    onChange={(e) => setSignupPassword(e.target.value)}
-                    className={inputClass}
-                    placeholder="6+ characters"
-                    required
-                    minLength={6}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showSignupPassword ? "text" : "password"}
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
+                      className={passwordInputClass}
+                      placeholder="6+ characters"
+                      required
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      aria-label={
+                        showSignupPassword ? "Hide password" : "Show password"
+                      }
+                      aria-pressed={showSignupPassword}
+                      onClick={() => setShowSignupPassword((visible) => !visible)}
+                      className={eyeButtonClass}
+                    >
+                      <EyeIcon visible={showSignupPassword} />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className={labelClass}>Retype Password</label>
+                  <div className="relative">
+                    <input
+                      type={showSignupPasswordConfirm ? "text" : "password"}
+                      value={signupPasswordConfirm}
+                      onChange={(e) =>
+                        setSignupPasswordConfirm(e.target.value)
+                      }
+                      className={passwordInputClass}
+                      placeholder="Retype password"
+                      required
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      aria-label={
+                        showSignupPasswordConfirm
+                          ? "Hide password confirmation"
+                          : "Show password confirmation"
+                      }
+                      aria-pressed={showSignupPasswordConfirm}
+                      onClick={() =>
+                        setShowSignupPasswordConfirm((visible) => !visible)
+                      }
+                      className={eyeButtonClass}
+                    >
+                      <EyeIcon visible={showSignupPasswordConfirm} />
+                    </button>
+                  </div>
                 </div>
                 {signupError && (
                   <p className="text-xs font-mono text-red-400/80">
@@ -178,14 +255,27 @@ export default function LoginPage() {
                 </div>
                 <div>
                   <label className={labelClass}>Password</label>
-                  <input
-                    type="password"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    className={inputClass}
-                    placeholder="Enter password"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type={showLoginPassword ? "text" : "password"}
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      className={passwordInputClass}
+                      placeholder="Enter password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      aria-label={
+                        showLoginPassword ? "Hide password" : "Show password"
+                      }
+                      aria-pressed={showLoginPassword}
+                      onClick={() => setShowLoginPassword((visible) => !visible)}
+                      className={eyeButtonClass}
+                    >
+                      <EyeIcon visible={showLoginPassword} />
+                    </button>
+                  </div>
                 </div>
                 {loginError && (
                   <p className="text-xs font-mono text-red-400/80">
