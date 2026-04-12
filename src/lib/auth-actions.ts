@@ -21,6 +21,11 @@ export async function signup(
   if (!trimmedEmail) return { success: false, error: "Email is required." };
   if (password.length < 6) return { success: false, error: "Password must be at least 6 characters." };
 
+  const emailRedirectTo =
+    process.env.NODE_ENV === "production"
+      ? "https://axis.yuvrajkashyap.com"
+      : "http://localhost:3000";
+
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.signUp({
     email: trimmedEmail,
@@ -29,6 +34,7 @@ export async function signup(
       data: {
         name: trimmedName,
       },
+      emailRedirectTo,
     },
   });
 
