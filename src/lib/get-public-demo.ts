@@ -15,6 +15,7 @@ type PublicDemoRow = {
   color: string | null;
   drift_mode: "PRESET" | "CUSTOM" | "NEVER" | null;
   drift_threshold_hours: number | null;
+  warning_lead_hours: number | null;
   commitment_requirement: "STANDARD" | "PASSIVE_ALIGNMENT" | null;
   orbit_speed: "STILL" | "SLOW" | "STANDARD" | "FAST" | null;
   visual_intensity: "SUBTLE" | "BALANCED" | "INTENSE" | null;
@@ -53,6 +54,7 @@ export async function getPublicDemoOrrery(): Promise<DomainData[]> {
       const settings = normalizeDomainSettings({
         driftMode: domain.drift_mode ?? undefined,
         driftThresholdHours: domain.drift_threshold_hours ?? undefined,
+        warningLeadHours: domain.warning_lead_hours ?? undefined,
         commitmentRequirement: domain.commitment_requirement ?? undefined,
         orbitSpeed: domain.orbit_speed ?? undefined,
         visualIntensity: domain.visual_intensity ?? undefined,

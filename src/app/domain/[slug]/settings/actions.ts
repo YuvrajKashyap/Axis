@@ -2,10 +2,12 @@
 
 import {
   clampDriftThresholdHours,
+  clampWarningLeadHours,
   clampPlanetSizeScale,
   DEFAULT_DRIFT_THRESHOLD_HOURS,
   DRIFT_PRESET_HOURS,
   normalizeDomainSettings,
+  validateWarningLeadHours,
   type DomainCommitmentRequirementValue,
   type DomainDriftModeValue,
   type DomainOrbitEccentricityValue,
@@ -20,6 +22,7 @@ import { revalidatePath } from "next/cache";
 type SaveDomainSettingsInput = {
   driftMode: DomainDriftModeValue;
   driftThresholdHours: number;
+  warningLeadHours: number | null;
   commitmentRequirement: DomainCommitmentRequirementValue;
   orbitSpeed: DomainOrbitSpeedValue;
   visualIntensity: DomainVisualIntensityValue;
@@ -62,6 +65,19 @@ export async function saveDomainSettings(
         ? normalized.driftThresholdHours
         : DEFAULT_DRIFT_THRESHOLD_HOURS
       : clampDriftThresholdHours(normalized.driftThresholdHours);
+  const warningLeadHours =
+    normalized.driftMode === "NEVER" || normalized.warningLeadHours === null
+      ? null
+      : clampWarningLeadHours(normalized.warningLeadHours);
+  const warningValidationError = validateWarningLeadHours({
+    driftMode: normalized.driftMode,
+    driftThresholdHours,
+    warningLeadHours,
+  });
+
+  if (warningValidationError) {
+    return { success: false as const, error: warningValidationError };
+  }
 
   const { error: updateError } = await supabase
     .schema("axis")
@@ -69,6 +85,7 @@ export async function saveDomainSettings(
     .update({
       drift_mode: normalized.driftMode,
       drift_threshold_hours: driftThresholdHours,
+      warning_lead_hours: warningLeadHours,
       commitment_requirement: normalized.commitmentRequirement,
       orbit_speed: normalized.orbitSpeed,
       visual_intensity: normalized.visualIntensity,

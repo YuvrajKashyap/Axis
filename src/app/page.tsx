@@ -29,6 +29,7 @@ function toOrreryData(domains: DomainList): DomainData[] {
     settings: normalizeDomainSettings({
       driftMode: domain.driftMode,
       driftThresholdHours: domain.driftThresholdHours,
+      warningLeadHours: domain.warningLeadHours,
       commitmentRequirement: domain.commitmentRequirement,
       orbitSpeed: domain.orbitSpeed,
       visualIntensity: domain.visualIntensity,

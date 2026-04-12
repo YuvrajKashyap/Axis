@@ -1,13 +1,16 @@
 "use client";
 
 import {
+  DEFAULT_WARNING_LEAD_HOURS,
   DEFAULT_DOMAIN_SETTINGS,
   DEFAULT_DRIFT_THRESHOLD_HOURS,
   DRIFT_PRESET_HOURS,
+  WARNING_LEAD_PRESET_HOURS,
   formatDriftThresholdLabel,
   getOrbitEccentricityRatio,
   getVisualIntensityMultiplier,
   normalizeDomainSettings,
+  validateWarningLeadHours,
   type DomainCommitmentRequirementValue,
   type DomainDriftModeValue,
   type DomainOrbitEccentricityValue,
@@ -49,6 +52,15 @@ type DriftSelectValue =
   | "never"
   | "custom";
 
+type WarningLeadSelectValue =
+  | "off"
+  | "1h"
+  | "3h"
+  | "6h"
+  | "12h"
+  | "24h"
+  | "custom";
+
 type SettingsTabKey = "behavior" | "motion" | "visual";
 
 function driftSelectFromSettings(
@@ -74,6 +86,20 @@ function customUnitFromHours(hours: number) {
 function customValueFromHours(hours: number) {
   const unit = customUnitFromHours(hours);
   return unit === "days" ? Math.max(1, Math.round(hours / 24)) : hours;
+}
+
+function warningLeadSelectFromSettings(
+  settings: DomainSettingsSnapshot,
+): WarningLeadSelectValue {
+  if (settings.warningLeadHours === null) return "off";
+  if (
+    WARNING_LEAD_PRESET_HOURS.includes(
+      settings.warningLeadHours as (typeof WARNING_LEAD_PRESET_HOURS)[number],
+    )
+  ) {
+    return `${settings.warningLeadHours}h` as WarningLeadSelectValue;
+  }
+  return "custom";
 }
 
 function hexToRgb(hex: string) {
@@ -232,12 +258,14 @@ function Pill<T extends string>({
   label,
   onChange,
   accentColor,
+  disabled = false,
 }: {
   value: T;
   current: T;
   label: string;
   onChange: (value: T) => void;
   accentColor: string;
+  disabled?: boolean;
 }) {
   const active = current === value;
 
@@ -245,11 +273,16 @@ function Pill<T extends string>({
     <button
       type="button"
       aria-pressed={active}
-      onClick={() => onChange(value)}
+      disabled={disabled}
+      onClick={() => {
+        if (!disabled) onChange(value);
+      }}
       className={`rounded border px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.18em] transition-all duration-200 ${
         active
           ? ""
-          : "border-white/[0.04] bg-transparent text-zinc-600 hover:border-white/10 hover:text-zinc-400"
+          : disabled
+            ? "cursor-not-allowed border-white/[0.03] bg-transparent text-zinc-800"
+            : "border-white/[0.04] bg-transparent text-zinc-600 hover:border-white/10 hover:text-zinc-400"
       }`}
       style={
         active
@@ -259,7 +292,11 @@ function Pill<T extends string>({
               color: accentColor,
               boxShadow: `inset 0 0 12px ${withAlpha(accentColor, 0.05)}`,
             }
-          : undefined
+          : disabled
+            ? {
+                opacity: 0.35,
+              }
+            : undefined
       }
     >
       {label}
@@ -324,6 +361,20 @@ export function DomainSettingsView({
   const [customValue, setCustomValue] = useState(
     customValueFromHours(initialSettings.driftThresholdHours),
   );
+  const [warningLeadSelect, setWarningLeadSelect] =
+    useState<WarningLeadSelectValue>(
+      warningLeadSelectFromSettings(initialSettings),
+    );
+  const [warningCustomUnit, setWarningCustomUnit] = useState<"hours" | "days">(
+    customUnitFromHours(
+      initialSettings.warningLeadHours ?? DEFAULT_WARNING_LEAD_HOURS,
+    ),
+  );
+  const [warningCustomValue, setWarningCustomValue] = useState(
+    customValueFromHours(
+      initialSettings.warningLeadHours ?? DEFAULT_WARNING_LEAD_HOURS,
+    ),
+  );
   const [commitmentRequirement, setCommitmentRequirement] =
     useState<DomainCommitmentRequirementValue>(
       initialSettings.commitmentRequirement,
@@ -345,6 +396,17 @@ export function DomainSettingsView({
     setDriftSelect(driftSelectFromSettings(nextSettings));
     setCustomUnit(customUnitFromHours(nextSettings.driftThresholdHours));
     setCustomValue(customValueFromHours(nextSettings.driftThresholdHours));
+    setWarningLeadSelect(warningLeadSelectFromSettings(nextSettings));
+    setWarningCustomUnit(
+      customUnitFromHours(
+        nextSettings.warningLeadHours ?? DEFAULT_WARNING_LEAD_HOURS,
+      ),
+    );
+    setWarningCustomValue(
+      customValueFromHours(
+        nextSettings.warningLeadHours ?? DEFAULT_WARNING_LEAD_HOURS,
+      ),
+    );
     setCommitmentRequirement(nextSettings.commitmentRequirement);
     setOrbitSpeed(nextSettings.orbitSpeed);
     setOrbitEccentricity(nextSettings.orbitEccentricity);
@@ -370,11 +432,27 @@ export function DomainSettingsView({
     queueAutosave();
   };
 
+  const changeWarningCustomUnit = (nextUnit: "hours" | "days") => {
+    if (nextUnit === warningCustomUnit) return;
+
+    setWarningCustomUnit(nextUnit);
+    setWarningCustomValue((currentValue) =>
+      nextUnit === "days"
+        ? Math.max(1, Math.min(7, Math.round(currentValue / 24) || 1))
+        : Math.max(1, Math.min(168, currentValue * 24)),
+    );
+    queueAutosave();
+  };
+
   const color = domain.color ?? "#67e8f9";
   const accentColor = color;
 
   const effectiveCustomHours =
     customUnit === "days" ? Math.min(7, customValue) * 24 : Math.min(168, customValue);
+  const effectiveWarningCustomHours =
+    warningCustomUnit === "days"
+      ? Math.min(7, warningCustomValue) * 24
+      : Math.min(168, warningCustomValue);
 
   const draftSettings = useMemo<DomainSettingsSnapshot>(() => {
     const driftMode: DomainDriftModeValue =
@@ -392,10 +470,19 @@ export function DomainSettingsView({
           : driftSelect === "7d"
             ? 168
             : Number.parseInt(driftSelect, 10);
+    const warningLeadHours =
+      driftMode === "NEVER"
+        ? null
+        : warningLeadSelect === "off"
+          ? null
+          : warningLeadSelect === "custom"
+            ? effectiveWarningCustomHours
+            : Number.parseInt(warningLeadSelect, 10);
 
     return normalizeDomainSettings({
       driftMode,
       driftThresholdHours,
+      warningLeadHours,
       commitmentRequirement,
       orbitSpeed,
       orbitEccentricity,
@@ -406,17 +493,36 @@ export function DomainSettingsView({
     commitmentRequirement,
     driftSelect,
     effectiveCustomHours,
+    effectiveWarningCustomHours,
     orbitEccentricity,
     orbitSpeed,
     planetSizeScale,
     visualIntensity,
+    warningLeadSelect,
   ]);
+
+  const warningValidationError = useMemo(
+    () => validateWarningLeadHours(draftSettings),
+    [draftSettings],
+  );
+  const isWarningDisabled = draftSettings.driftMode === "NEVER";
+  const maxWarningLeadHours = isWarningDisabled
+    ? null
+    : draftSettings.driftThresholdHours;
+  const canUseWarningDays =
+    maxWarningLeadHours !== null && maxWarningLeadHours >= 24;
+  const warningCustomMaxHours = maxWarningLeadHours ?? 168;
+  const warningCustomMaxDays = Math.max(
+    1,
+    Math.min(7, Math.floor(warningCustomMaxHours / 24)),
+  );
 
   const isDirty =
     JSON.stringify(draftSettings) !== JSON.stringify(savedSettings);
 
   useEffect(() => {
     if (!isDirty || autosaveRevision === 0) return;
+    if (warningValidationError) return;
 
     const settingsToSave = draftSettings;
     const timeoutId = window.setTimeout(() => {
@@ -439,10 +545,20 @@ export function DomainSettingsView({
     }, 420);
 
     return () => window.clearTimeout(timeoutId);
-  }, [autosaveRevision, domain.id, draftSettings, isDirty, startTransition, targetUserId]);
+  }, [
+    autosaveRevision,
+    domain.id,
+    draftSettings,
+    isDirty,
+    startTransition,
+    targetUserId,
+    warningValidationError,
+  ]);
 
   const statusLabel =
-    saveState === "error"
+    warningValidationError && isDirty
+      ? warningValidationError
+      : saveState === "error"
       ? saveError || "save failed"
       : isPending || isDirty
         ? "saving..."
@@ -460,9 +576,14 @@ export function DomainSettingsView({
     draftSettings.driftMode === "NEVER"
       ? "off"
       : formatDriftThresholdLabel(draftSettings.driftThresholdHours);
+  const warningSummaryLabel =
+    draftSettings.warningLeadHours === null
+      ? "off"
+      : formatDriftThresholdLabel(draftSettings.warningLeadHours);
 
   const currentConfigItems = [
     { label: "Drift", value: driftSummaryLabel },
+    { label: "Warn", value: warningSummaryLabel },
     {
       label: "Commit",
       value:
@@ -807,6 +928,128 @@ export function DomainSettingsView({
                       </div>
                     </div>
                   ) : null}
+                </SettingRow>
+
+                <SettingRow
+                  label="Warn Before Drift"
+                  detail="When Axis warns you before this planet drifts."
+                >
+                  <div
+                    className={`space-y-4 transition-opacity ${
+                      isWarningDisabled ? "opacity-45" : ""
+                    }`}
+                  >
+                    <div className="flex flex-wrap gap-1.5">
+                      {(
+                        [
+                          "off",
+                          "1h",
+                          "3h",
+                          "6h",
+                          "12h",
+                          "24h",
+                          "custom",
+                        ] as WarningLeadSelectValue[]
+                      ).map((value) => {
+                        const numericHours =
+                          value === "custom" || value === "off"
+                            ? null
+                            : Number.parseInt(value, 10);
+                        const exceedsDriftDuration =
+                          numericHours !== null &&
+                          maxWarningLeadHours !== null &&
+                          numericHours > maxWarningLeadHours;
+
+                        return (
+                          <Pill
+                            key={value}
+                            value={value}
+                            current={warningLeadSelect}
+                            label={
+                              value === "off"
+                                ? "Off"
+                                : value === "custom"
+                                  ? "Custom"
+                                  : value
+                            }
+                            accentColor={accentColor}
+                            disabled={isWarningDisabled || exceedsDriftDuration}
+                            onChange={(nextValue) => {
+                              setWarningLeadSelect(nextValue);
+                              queueAutosave();
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+
+                    {warningLeadSelect === "custom" ? (
+                      <div className="rounded border border-white/[0.04] bg-white/[0.015] p-4">
+                        <div className="mb-3 flex flex-wrap gap-3">
+                          <Pill
+                            value="hours"
+                            current={warningCustomUnit}
+                            label="Hours"
+                            accentColor={accentColor}
+                            disabled={isWarningDisabled}
+                            onChange={changeWarningCustomUnit}
+                          />
+                          <Pill
+                            value="days"
+                            current={warningCustomUnit}
+                            label="Days"
+                            accentColor={accentColor}
+                            disabled={isWarningDisabled || !canUseWarningDays}
+                            onChange={changeWarningCustomUnit}
+                          />
+                        </div>
+                        <input
+                          type="range"
+                          min={1}
+                          max={
+                            warningCustomUnit === "days"
+                              ? warningCustomMaxDays
+                              : warningCustomMaxHours
+                          }
+                          step={1}
+                          value={warningCustomValue}
+                          disabled={isWarningDisabled}
+                          onChange={(e) => {
+                            setWarningCustomValue(Number(e.target.value));
+                            queueAutosave();
+                          }}
+                          className="settings-range w-full disabled:cursor-not-allowed disabled:opacity-40"
+                          style={{
+                            background: `linear-gradient(90deg, rgba(255,255,255,0.1), ${withAlpha(accentColor, 0.28)}, rgba(255,255,255,0.08))`,
+                          }}
+                        />
+                        <div className="mt-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.22em] text-zinc-600">
+                          <span>
+                            1 {warningCustomUnit === "days" ? "day" : "hour"}
+                          </span>
+                          <span>
+                            {warningCustomValue} {warningCustomUnit}
+                          </span>
+                          <span>
+                            {warningCustomUnit === "days"
+                              ? `${warningCustomMaxDays} day${warningCustomMaxDays === 1 ? "" : "s"}`
+                              : `${warningCustomMaxHours} hour${warningCustomMaxHours === 1 ? "" : "s"}`}
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {isWarningDisabled ? (
+                      <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-700">
+                        Warnings are off while drift is set to Never.
+                      </p>
+                    ) : null}
+                    {warningValidationError ? (
+                      <p className="text-[11px] leading-relaxed text-red-400/80">
+                        {warningValidationError}
+                      </p>
+                    ) : null}
+                  </div>
                 </SettingRow>
 
                 <SettingRow

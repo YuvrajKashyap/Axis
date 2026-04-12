@@ -1,8 +1,11 @@
 export const DEFAULT_DRIFT_THRESHOLD_HOURS = 72;
 export const DRIFT_WARNING_LEAD_HOURS = 12;
 export const MAX_DRIFT_THRESHOLD_HOURS = 7 * 24;
+export const DEFAULT_WARNING_LEAD_HOURS = DRIFT_WARNING_LEAD_HOURS;
+export const MAX_WARNING_LEAD_HOURS = MAX_DRIFT_THRESHOLD_HOURS;
 
 export const DRIFT_PRESET_HOURS = [24, 48, 72, 96, 168] as const;
+export const WARNING_LEAD_PRESET_HOURS = [1, 3, 6, 12, 24] as const;
 
 export const DRIFT_MODE_VALUES = ["PRESET", "CUSTOM", "NEVER"] as const;
 export type DomainDriftModeValue = (typeof DRIFT_MODE_VALUES)[number];
@@ -45,6 +48,7 @@ export const PLANET_SIZE_SCALE_DEFAULT = 1;
 export type DomainSettingsSnapshot = {
   driftMode: DomainDriftModeValue;
   driftThresholdHours: number;
+  warningLeadHours: number | null;
   commitmentRequirement: DomainCommitmentRequirementValue;
   orbitSpeed: DomainOrbitSpeedValue;
   visualIntensity: DomainVisualIntensityValue;
@@ -55,6 +59,7 @@ export type DomainSettingsSnapshot = {
 export const DEFAULT_DOMAIN_SETTINGS: DomainSettingsSnapshot = {
   driftMode: "PRESET",
   driftThresholdHours: DEFAULT_DRIFT_THRESHOLD_HOURS,
+  warningLeadHours: DEFAULT_WARNING_LEAD_HOURS,
   commitmentRequirement: "STANDARD",
   orbitSpeed: "STANDARD",
   visualIntensity: "BALANCED",
@@ -66,6 +71,14 @@ export function clampDriftThresholdHours(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_DRIFT_THRESHOLD_HOURS;
   return Math.min(
     MAX_DRIFT_THRESHOLD_HOURS,
+    Math.max(1, Math.round(value)),
+  );
+}
+
+export function clampWarningLeadHours(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_WARNING_LEAD_HOURS;
+  return Math.min(
+    MAX_WARNING_LEAD_HOURS,
     Math.max(1, Math.round(value)),
   );
 }
@@ -87,6 +100,50 @@ export function getEffectiveDriftThresholdMs(
 ): number | null {
   const hours = getEffectiveDriftThresholdHours(settings);
   return hours === null ? null : hours * 60 * 60 * 1000;
+}
+
+export function getEffectiveWarningLeadHours(
+  settings: Pick<
+    DomainSettingsSnapshot,
+    "driftMode" | "driftThresholdHours" | "warningLeadHours"
+  >,
+): number | null {
+  if (settings.driftMode === "NEVER") return null;
+  if (settings.warningLeadHours === null) return null;
+  return clampWarningLeadHours(settings.warningLeadHours);
+}
+
+export function validateWarningLeadHours(
+  settings: Pick<
+    DomainSettingsSnapshot,
+    "driftMode" | "driftThresholdHours" | "warningLeadHours"
+  >,
+): string | null {
+  if (settings.driftMode === "NEVER") {
+    return settings.warningLeadHours === null
+      ? null
+      : "Warn Before Drift must be Off when drift is set to Never.";
+  }
+
+  if (settings.warningLeadHours === null) {
+    return null;
+  }
+
+  if (
+    !Number.isFinite(settings.warningLeadHours) ||
+    settings.warningLeadHours < 1
+  ) {
+    return "Warn Before Drift must be at least 1 hour or Off.";
+  }
+
+  const warningLeadHours = clampWarningLeadHours(settings.warningLeadHours);
+  const driftThresholdHours = getEffectiveDriftThresholdHours(settings);
+
+  if (driftThresholdHours !== null && warningLeadHours > driftThresholdHours) {
+    return "Warn Before Drift cannot exceed this planet's drift duration.";
+  }
+
+  return null;
 }
 
 export function formatDriftThresholdLabel(hours: number | null): string {
@@ -143,14 +200,25 @@ export function getOrbitEccentricityRatio(
 export function normalizeDomainSettings(
   partial: Partial<DomainSettingsSnapshot> | null | undefined,
 ): DomainSettingsSnapshot {
+  const driftMode =
+    partial?.driftMode && DRIFT_MODE_VALUES.includes(partial.driftMode)
+      ? partial.driftMode
+      : DEFAULT_DOMAIN_SETTINGS.driftMode;
+
   return {
-    driftMode:
-      partial?.driftMode && DRIFT_MODE_VALUES.includes(partial.driftMode)
-        ? partial.driftMode
-        : DEFAULT_DOMAIN_SETTINGS.driftMode,
+    driftMode,
     driftThresholdHours: clampDriftThresholdHours(
       partial?.driftThresholdHours ?? DEFAULT_DOMAIN_SETTINGS.driftThresholdHours,
     ),
+    warningLeadHours:
+      driftMode === "NEVER"
+        ? null
+        : partial?.warningLeadHours === null
+          ? null
+          : clampWarningLeadHours(
+              partial?.warningLeadHours ??
+                DEFAULT_WARNING_LEAD_HOURS,
+            ),
     commitmentRequirement:
       partial?.commitmentRequirement &&
       COMMITMENT_REQUIREMENT_VALUES.includes(partial.commitmentRequirement)
