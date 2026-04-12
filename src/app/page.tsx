@@ -47,28 +47,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const { demo, pulseDomain } = await searchParams;
 
   if (!user) {
-    const demoUserId = process.env.DEMO_USER_ID?.trim();
-    let publicDemoDomains = DEMO_DOMAINS;
-
-    if (demoUserId) {
-      try {
-        const demoDomains = await getDomains(demoUserId, {
-          disableAutoDrift: true,
-        });
-
-        if (demoDomains.length > 0) {
-          publicDemoDomains = toOrreryData(demoDomains);
-        }
-      } catch (error) {
-        console.error("Failed to load live demo domains, using fallback demo.", {
-          error,
-        });
-      }
-    }
-
     return (
       <Orrery
-        domains={publicDemoDomains}
+        domains={DEMO_DOMAINS}
         isDemo
         returnPulseDomainId={pulseDomain ?? null}
       />
