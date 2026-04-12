@@ -4,8 +4,7 @@ import {
   type DomainListItem,
   type DomainListStatus,
 } from "@/lib/get-data";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { requireSupabaseUser } from "@/lib/supabase-auth";
 import Link from "next/link";
 import "./orrery.css";
 
@@ -65,10 +64,8 @@ const SIZE = 600; // px square container
 const CENTER = SIZE / 2;
 
 export default async function Design6() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
-  const domains: DomainList = await getDomains(session.user.id);
+  const user = await requireSupabaseUser();
+  const domains: DomainList = await getDomains(user.id);
 
   return (
     <main className="min-h-screen bg-black text-white flex flex-col">

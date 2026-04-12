@@ -4,8 +4,7 @@ import {
   type DomainListItem,
   type DomainListStatus,
 } from "@/lib/get-data";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { requireSupabaseUser } from "@/lib/supabase-auth";
 import Link from "next/link";
 
 const statusIndicator: Record<
@@ -28,10 +27,8 @@ const statusIndicator: Record<
 // Nothing grid-like. Nothing card-like. Pure sequential signal reading.
 
 export default async function Design2() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
-  const domains: DomainList = await getDomains(session.user.id);
+  const user = await requireSupabaseUser();
+  const domains: DomainList = await getDomains(user.id);
 
   const now = new Date();
   const timeCode = now.toISOString().slice(0, 19).replace("T", " ");
