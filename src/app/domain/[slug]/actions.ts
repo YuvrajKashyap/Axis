@@ -106,7 +106,7 @@ export async function createCommitment(
       .maybeSingle();
 
     if (domainError) {
-      return { success: false, error: "Failed to load domain." };
+      return { success: false, error: domainError.message };
     }
 
     if (!domain) {
@@ -123,13 +123,19 @@ export async function createCommitment(
       });
 
     if (insertError) {
-      return { success: false, error: "Failed to create commitment." };
+      console.error("Failed to insert commitment", {
+        domainId,
+        userId,
+        error: insertError,
+      });
+      return { success: false, error: insertError.message };
     }
 
     await scheduleDomainDriftWarningSafely(domain.id);
     revalidatePath("/");
     return { success: true };
-  } catch {
+  } catch (error) {
+    console.error("Failed to create commitment", { domainId, error });
     return {
       success: false,
       error: "Failed to create commitment.",

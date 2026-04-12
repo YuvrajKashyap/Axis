@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signup, login } from "@/lib/auth-actions";
 
@@ -25,7 +24,6 @@ function EyeIcon({ visible }: { visible: boolean }) {
 }
 
 export default function LoginPage() {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [mode, setMode] = useState<"signup" | "login">("signup");
 
@@ -55,14 +53,19 @@ export default function LoginPage() {
     }
 
     startTransition(async () => {
-      const result = await signup(signupName, signupEmail, signupPassword);
-      if (result.success && !result.pendingVerification) {
-        router.push("/");
-        router.refresh();
-      } else if (result.success) {
-        setSignupMessage(result.message || "Check your email to confirm your account.");
-      } else {
-        setSignupError(result.error || "Something went wrong.");
+      try {
+        const result = await signup(signupName, signupEmail, signupPassword);
+        if (result.success && !result.pendingVerification) {
+          window.location.assign("/");
+        } else if (result.success) {
+          setSignupMessage(
+            result.message || "Check your email to confirm your account.",
+          );
+        } else {
+          setSignupError(result.error || "Something went wrong.");
+        }
+      } catch {
+        setSignupError("Something went wrong.");
       }
     });
   }
@@ -71,12 +74,15 @@ export default function LoginPage() {
     e.preventDefault();
     setLoginError("");
     startTransition(async () => {
-      const result = await login(loginEmail, loginPassword);
-      if (result.success) {
-        router.push("/");
-        router.refresh();
-      } else {
-        setLoginError(result.error || "Something went wrong.");
+      try {
+        const result = await login(loginEmail, loginPassword);
+        if (result.success) {
+          window.location.assign("/");
+        } else {
+          setLoginError(result.error || "Something went wrong.");
+        }
+      } catch {
+        setLoginError("Something went wrong.");
       }
     });
   }
