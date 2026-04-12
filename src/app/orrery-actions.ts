@@ -1,39 +1,13 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
-import { getOrCreateDemoUserId, isAdmin } from "@/lib/get-data";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getAuthorizedTargetUserId } from "@/lib/target-user";
 import { revalidatePath } from "next/cache";
 
 type OrbitUpdate = {
   id: string;
   radius: number;
 };
-
-async function getAuthorizedTargetUserId(targetUserId?: string) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return null;
-  }
-
-  const sessionUserId = session.user.id;
-
-  if (!targetUserId || targetUserId === sessionUserId) {
-    return sessionUserId;
-  }
-
-  const admin = await isAdmin(session.user.email);
-  if (!admin) {
-    return null;
-  }
-
-  const demoUserId = await getOrCreateDemoUserId();
-  if (!demoUserId || targetUserId !== demoUserId) {
-    return null;
-  }
-
-  return demoUserId;
-}
 
 export async function updateOrbit(
   domainId: string,
@@ -45,10 +19,17 @@ export async function updateOrbit(
     return;
   }
 
-  await prisma.domain.updateMany({
-    where: { id: domainId, userId },
-    data: { positionX: normalizedRadius },
-  });
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .schema("axis")
+    .from("domains")
+    .update({ position_x: normalizedRadius })
+    .eq("id", domainId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(`Failed to update orbit: ${error.message}`);
+  }
 }
 
 export async function resetOrbits(
@@ -64,12 +45,20 @@ export async function resetOrbits(
     return;
   }
 
+  const supabase = await createSupabaseServerClient();
   await Promise.all(
     updates.map((update: OrbitUpdate) =>
-      prisma.domain.updateMany({
-        where: { id: update.id, userId },
-        data: { positionX: update.radius },
-      }),
+      supabase
+        .schema("axis")
+        .from("domains")
+        .update({ position_x: update.radius })
+        .eq("id", update.id)
+        .eq("user_id", userId)
+        .then(({ error }) => {
+          if (error) {
+            throw new Error(`Failed to reset orbit: ${error.message}`);
+          }
+        }),
     ),
   );
   revalidatePath("/");
@@ -89,18 +78,33 @@ export async function createDomain(name: string, overrideUserId?: string): Promi
 
   if (!slug) return { success: false, error: "Invalid name." };
 
-  const existing = await prisma.domain.findFirst({
-    where: { userId, slug },
-  });
+  const supabase = await createSupabaseServerClient();
+  const { data: existing, error: existingError } = await supabase
+    .schema("axis")
+    .from("domains")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (existingError) {
+    return { success: false, error: existingError.message };
+  }
+
   if (existing) return { success: false, error: "A domain with that name already exists." };
 
-  await prisma.domain.create({
-    data: {
+  const { error: insertError } = await supabase
+    .schema("axis")
+    .from("domains")
+    .insert({
       name: trimmed,
       slug,
-      userId,
-    },
-  });
+      user_id: userId,
+    });
+
+  if (insertError) {
+    return { success: false, error: insertError.message };
+  }
 
   revalidatePath("/");
   return { success: true };
