@@ -13,7 +13,7 @@ import {
   type DomainVisualIntensityValue,
 } from "@/lib/domain-settings";
 import { scheduleDomainDriftWarning } from "@/lib/drift-warning";
-import { prisma } from "@/lib/prisma";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getAuthorizedTargetUserId } from "@/lib/target-user";
 import { revalidatePath } from "next/cache";
 
@@ -37,13 +37,18 @@ export async function saveDomainSettings(
     return { success: false as const, error: "Not signed in." };
   }
 
-  const domain = await prisma.domain.findFirst({
-    where: { id: domainId, userId },
-    select: {
-      id: true,
-      slug: true,
-    },
-  });
+  const supabase = await createSupabaseServerClient();
+  const { data: domain, error: domainError } = await supabase
+    .schema("axis")
+    .from("domains")
+    .select("id, slug")
+    .eq("id", domainId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (domainError) {
+    return { success: false as const, error: "Failed to load domain." };
+  }
 
   if (!domain) {
     return { success: false as const, error: "Domain not found." };
@@ -58,18 +63,24 @@ export async function saveDomainSettings(
         : DEFAULT_DRIFT_THRESHOLD_HOURS
       : clampDriftThresholdHours(normalized.driftThresholdHours);
 
-  await prisma.domain.update({
-    where: { id: domain.id },
-    data: {
-      driftMode: normalized.driftMode,
-      driftThresholdHours,
-      commitmentRequirement: normalized.commitmentRequirement,
-      orbitSpeed: normalized.orbitSpeed,
-      visualIntensity: normalized.visualIntensity,
-      planetSizeScale: clampPlanetSizeScale(normalized.planetSizeScale),
-      orbitEccentricity: normalized.orbitEccentricity,
-    },
-  });
+  const { error: updateError } = await supabase
+    .schema("axis")
+    .from("domains")
+    .update({
+      drift_mode: normalized.driftMode,
+      drift_threshold_hours: driftThresholdHours,
+      commitment_requirement: normalized.commitmentRequirement,
+      orbit_speed: normalized.orbitSpeed,
+      visual_intensity: normalized.visualIntensity,
+      planet_size_scale: clampPlanetSizeScale(normalized.planetSizeScale),
+      orbit_eccentricity: normalized.orbitEccentricity,
+    })
+    .eq("id", domain.id)
+    .eq("user_id", userId);
+
+  if (updateError) {
+    return { success: false as const, error: updateError.message };
+  }
 
   try {
     await scheduleDomainDriftWarning(domain.id);
