@@ -1,6 +1,8 @@
 "use server";
 
+import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { Resend } from "resend";
 
 type AuthResult = {
   success: boolean;
@@ -18,6 +20,125 @@ function getAuthConfirmRedirectUrl() {
   return `${baseUrl}/auth/confirm?next=/`;
 }
 
+function hasCustomSignupEmailConfig() {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY &&
+      process.env.RESEND_API_KEY &&
+      process.env.RESEND_FROM_EMAIL,
+  );
+}
+
+function getResendClient() {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("Missing RESEND_API_KEY for auth emails.");
+  }
+
+  return new Resend(process.env.RESEND_API_KEY);
+}
+
+async function sendAxisAuthEmail({
+  email,
+  name,
+  actionLink,
+  subject,
+  intro,
+  cta,
+}: {
+  email: string;
+  name: string;
+  actionLink: string;
+  subject: string;
+  intro: string;
+  cta: string;
+}) {
+  if (!process.env.RESEND_FROM_EMAIL) {
+    throw new Error("Missing RESEND_FROM_EMAIL for auth emails.");
+  }
+
+  const resend = getResendClient();
+  const firstName = name.trim() || "there";
+  const { error } = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL,
+    to: [email],
+    subject,
+    html: `
+      <div style="background:#09090b;color:#f4f4f5;padding:32px;font-family:Inter,Helvetica,Arial,sans-serif;">
+        <p style="margin:0 0 16px;font-size:11px;letter-spacing:0.32em;text-transform:uppercase;color:#71717a;">Axis</p>
+        <h1 style="margin:0 0 16px;font-size:24px;line-height:1.2;font-weight:600;">Hi ${firstName}.</h1>
+        <p style="margin:0;color:#d4d4d8;font-size:15px;line-height:1.7;">${intro}</p>
+        <p style="margin:28px 0 0;">
+          <a href="${actionLink}" style="display:inline-block;border:1px solid rgba(255,255,255,0.14);padding:12px 18px;color:#f4f4f5;text-decoration:none;letter-spacing:0.18em;text-transform:uppercase;font-size:11px;">${cta}</a>
+        </p>
+        <p style="margin:20px 0 0;color:#71717a;font-size:13px;line-height:1.6;">If the button does not work, open this link:</p>
+        <p style="margin:8px 0 0;color:#a1a1aa;font-size:13px;line-height:1.6;word-break:break-all;">${actionLink}</p>
+      </div>
+    `,
+    text: `Axis\n\n${intro}\n\n${cta}: ${actionLink}`,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+async function sendCustomSignupEmail(
+  name: string,
+  email: string,
+  password: string,
+  redirectTo: string,
+) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: "signup",
+    email,
+    password,
+    options: {
+      data: {
+        name,
+      },
+      redirectTo,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  await sendAxisAuthEmail({
+    email,
+    name,
+    actionLink: data.properties.action_link,
+    subject: "Confirm your Axis account",
+    intro: "Confirm your email to enter your orrery.",
+    cta: "Confirm email",
+  });
+}
+
+async function sendExistingUserLink(name: string, email: string, redirectTo: string) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email,
+    options: {
+      redirectTo,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  await sendAxisAuthEmail({
+    email,
+    name,
+    actionLink: data.properties.action_link,
+    subject: "Continue to Axis",
+    intro: "Use this secure link to continue into Axis.",
+    cta: "Open Axis",
+  });
+}
+
 export async function signup(
   name: string,
   email: string,
@@ -31,6 +152,55 @@ export async function signup(
   if (password.length < 6) return { success: false, error: "Password must be at least 6 characters." };
 
   const emailRedirectTo = getAuthConfirmRedirectUrl();
+
+  if (hasCustomSignupEmailConfig()) {
+    try {
+      await sendCustomSignupEmail(
+        trimmedName,
+        trimmedEmail,
+        password,
+        emailRedirectTo,
+      );
+
+      return {
+        success: true,
+        pendingVerification: true,
+        message: "Check your email to confirm your account.",
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message.toLowerCase() : "";
+
+      if (
+        message.includes("already") ||
+        message.includes("registered") ||
+        message.includes("exists")
+      ) {
+        try {
+          await sendExistingUserLink(trimmedName, trimmedEmail, emailRedirectTo);
+          return {
+            success: true,
+            pendingVerification: true,
+            message: "Check your email to continue into Axis.",
+          };
+        } catch (existingUserError) {
+          return {
+            success: false,
+            error:
+              existingUserError instanceof Error
+                ? existingUserError.message
+                : "Failed to send Axis email.",
+          };
+        }
+      }
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to create account.",
+      };
+    }
+  }
+
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.signUp({
     email: trimmedEmail,
