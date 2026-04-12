@@ -2,8 +2,9 @@ import { Client, Receiver } from "@upstash/qstash";
 import { computeDriftState } from "@/lib/drift";
 import {
   DEFAULT_DOMAIN_SETTINGS,
-  DRIFT_WARNING_LEAD_HOURS,
+  formatDriftThresholdLabel,
   getEffectiveDriftThresholdHours,
+  getEffectiveWarningLeadHours,
   type DomainCommitmentRequirementValue,
   type DomainDriftModeValue,
 } from "@/lib/domain-settings";
@@ -12,7 +13,6 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { Resend } from "resend";
 
 const DRIFT_WARNING_TOLERANCE_MS = 90 * 60 * 1000;
-const DRIFT_WARNING_LEAD_MS = DRIFT_WARNING_LEAD_HOURS * 60 * 60 * 1000;
 
 const qstashClient = process.env.QSTASH_TOKEN
   ? new Client({
@@ -40,6 +40,7 @@ type DomainWarningContext = {
   userId: string;
   driftMode: DomainDriftModeValue;
   driftThresholdHours: number;
+  warningLeadHours: number | null;
   commitmentRequirement: DomainCommitmentRequirementValue;
   lastPassiveAlignmentAt: Date | null;
   lastDriftWarningSentAt: Date | null;
@@ -59,6 +60,7 @@ type DomainWarningRow = {
   user_id: string;
   drift_mode: DomainDriftModeValue | null;
   drift_threshold_hours: number | null;
+  warning_lead_hours: number | null;
   commitment_requirement: DomainCommitmentRequirementValue | null;
   last_passive_alignment_at: string | null;
   last_drift_warning_sent_at: string | null;
@@ -96,7 +98,7 @@ async function getDomainWarningContext(
     .schema("axis")
     .from("domains")
     .select(
-      "id, name, slug, status, user_id, drift_mode, drift_threshold_hours, commitment_requirement, last_passive_alignment_at, last_drift_warning_sent_at, last_drift_warning_activity_at",
+      "id, name, slug, status, user_id, drift_mode, drift_threshold_hours, warning_lead_hours, commitment_requirement, last_passive_alignment_at, last_drift_warning_sent_at, last_drift_warning_activity_at",
     )
     .eq("id", domainId)
     .maybeSingle<DomainWarningRow>();
@@ -137,6 +139,8 @@ async function getDomainWarningContext(
     driftThresholdHours:
       domain.drift_threshold_hours ??
       DEFAULT_DOMAIN_SETTINGS.driftThresholdHours,
+    warningLeadHours:
+      domain.warning_lead_hours ?? DEFAULT_DOMAIN_SETTINGS.warningLeadHours,
     commitmentRequirement:
       domain.commitment_requirement ??
       DEFAULT_DOMAIN_SETTINGS.commitmentRequirement,
@@ -171,22 +175,31 @@ function buildWarningPayload(
     driftMode: domain.driftMode,
     driftThresholdHours: domain.driftThresholdHours,
   });
+  const warningLeadHours = getEffectiveWarningLeadHours({
+    driftMode: domain.driftMode,
+    driftThresholdHours: domain.driftThresholdHours,
+    warningLeadHours: domain.warningLeadHours,
+  });
   const driftDisabled = driftThresholdHours === null;
   const warningEligible =
     !driftDisabled &&
+    warningLeadHours !== null &&
     domain.status !== "ARCHIVED" &&
     domain.status !== "DRIFTING" &&
     !driftState.autoDrifted &&
     domain.userId !== DEMO_USER_ID;
+  const warningLeadMs =
+    warningLeadHours === null ? null : warningLeadHours * 60 * 60 * 1000;
 
   const warningAt =
-    warningEligible && driftState.nextDriftAt
-      ? new Date(driftState.nextDriftAt.getTime() - DRIFT_WARNING_LEAD_MS)
+    warningEligible && driftState.nextDriftAt && warningLeadMs !== null
+      ? new Date(driftState.nextDriftAt.getTime() - warningLeadMs)
       : null;
 
   return {
     driftState,
     driftThresholdHours,
+    warningLeadHours,
     driftDisabled,
     warningEligible,
     warningAt,
@@ -207,7 +220,10 @@ function buildDomainUrl(slug: string) {
   return new URL(`/domain/${slug}`, appBaseUrl).toString();
 }
 
-async function sendDriftWarningEmail(domain: DomainWarningContext) {
+async function sendDriftWarningEmail(
+  domain: DomainWarningContext,
+  warningLeadHours: number,
+) {
   if (!resendClient) return { sent: false, reason: "resend-not-configured" as const };
   if (!process.env.RESEND_FROM_EMAIL) {
     return { sent: false, reason: "resend-from-missing" as const };
@@ -218,6 +234,7 @@ async function sendDriftWarningEmail(domain: DomainWarningContext) {
 
   const latestCommitmentText = domain.commitments[0]?.text?.trim() || null;
   const domainUrl = buildDomainUrl(domain.slug);
+  const warningLeadLabel = formatDriftThresholdLabel(warningLeadHours);
   const latestCommitmentHtml = latestCommitmentText
     ? `<p style="margin:20px 0 0;color:#71717a;font-size:13px;line-height:1.6;"><strong style="color:#e4e4e7;">Latest commitment:</strong> ${escapeHtml(latestCommitmentText)}</p>`
     : "";
@@ -228,11 +245,11 @@ async function sendDriftWarningEmail(domain: DomainWarningContext) {
   const { error } = await resendClient.emails.send({
     from: process.env.RESEND_FROM_EMAIL,
     to: [domain.recipientEmail],
-    subject: `Axis: ${domain.name} drifts in 12 hours`,
+    subject: `Axis: ${domain.name} drifts in ${warningLeadLabel}`,
     html: `
       <div style="background:#09090b;color:#f4f4f5;padding:32px;font-family:Inter,Helvetica,Arial,sans-serif;">
         <p style="margin:0 0 16px;font-size:11px;letter-spacing:0.32em;text-transform:uppercase;color:#71717a;">Axis</p>
-        <h1 style="margin:0 0 16px;font-size:24px;line-height:1.2;font-weight:600;">${escapeHtml(domain.name)} drifts in 12 hours.</h1>
+        <h1 style="margin:0 0 16px;font-size:24px;line-height:1.2;font-weight:600;">${escapeHtml(domain.name)} drifts in ${escapeHtml(warningLeadLabel)}.</h1>
         <p style="margin:0;color:#d4d4d8;font-size:15px;line-height:1.7;">Recommit or let it drift.</p>
         ${latestCommitmentHtml}
         ${
@@ -242,7 +259,7 @@ async function sendDriftWarningEmail(domain: DomainWarningContext) {
         }
       </div>
     `,
-    text: `Axis\n\n${domain.name} drifts in 12 hours.\nRecommit or let it drift.${latestCommitmentTextBlock}${domainUrl ? `\n\nOpen: ${domainUrl}` : ""}`,
+    text: `Axis\n\n${domain.name} drifts in ${warningLeadLabel}.\nRecommit or let it drift.${latestCommitmentTextBlock}${domainUrl ? `\n\nOpen: ${domainUrl}` : ""}`,
   });
 
   if (error) {
@@ -277,7 +294,12 @@ export async function processDomainDriftWarning(
   const warning = buildWarningPayload(domain, nowMs);
   const currentActivityAt = warning.driftState.lastRelevantActivityAt;
 
-  if (!warning.warningEligible || !warning.warningAt || !currentActivityAt) {
+  if (
+    !warning.warningEligible ||
+    !warning.warningAt ||
+    warning.warningLeadHours === null ||
+    !currentActivityAt
+  ) {
     return { sent: false, reason: "not-eligible" as const };
   }
 
@@ -306,7 +328,10 @@ export async function processDomainDriftWarning(
     return { sent: false, reason: "already-drifted" as const };
   }
 
-  const sendResult = await sendDriftWarningEmail(domain);
+  const sendResult = await sendDriftWarningEmail(
+    domain,
+    warning.warningLeadHours,
+  );
   if (!sendResult.sent) {
     return sendResult;
   }
@@ -340,7 +365,12 @@ export async function scheduleDomainDriftWarning(domainId: string) {
   const warning = buildWarningPayload(domain);
   const currentActivityAt = warning.driftState.lastRelevantActivityAt;
 
-  if (!warning.warningEligible || !warning.warningAt || !currentActivityAt) {
+  if (
+    !warning.warningEligible ||
+    !warning.warningAt ||
+    warning.warningLeadHours === null ||
+    !currentActivityAt
+  ) {
     return { scheduled: false, reason: "not-eligible" as const };
   }
 

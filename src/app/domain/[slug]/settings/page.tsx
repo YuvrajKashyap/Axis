@@ -17,7 +17,7 @@ async function getDomainSettingsDetail(userId: string, slug: string) {
     .schema("axis")
     .from("domains")
     .select(
-      "id,name,slug,color,position_x,drift_mode,drift_threshold_hours,commitment_requirement,orbit_speed,visual_intensity,planet_size_scale,orbit_eccentricity",
+      "id,name,slug,color,position_x,drift_mode,drift_threshold_hours,warning_lead_hours,commitment_requirement,orbit_speed,visual_intensity,planet_size_scale,orbit_eccentricity",
     )
     .eq("user_id", userId)
     .eq("slug", slug)
@@ -39,6 +39,7 @@ async function getDomainSettingsDetail(userId: string, slug: string) {
     positionX: data.position_x,
     driftMode: data.drift_mode,
     driftThresholdHours: data.drift_threshold_hours,
+    warningLeadHours: data.warning_lead_hours,
     commitmentRequirement: data.commitment_requirement,
     orbitSpeed: data.orbit_speed,
     visualIntensity: data.visual_intensity,
@@ -89,6 +90,7 @@ export default async function DomainSettingsPage({
       settings={normalizeDomainSettings({
         driftMode: domain.driftMode,
         driftThresholdHours: domain.driftThresholdHours,
+        warningLeadHours: domain.warningLeadHours,
         commitmentRequirement: domain.commitmentRequirement,
         orbitSpeed: domain.orbitSpeed,
         visualIntensity: domain.visualIntensity,

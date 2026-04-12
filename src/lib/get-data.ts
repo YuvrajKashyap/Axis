@@ -31,6 +31,7 @@ type SupabaseDomainRow = {
     | "NEVER"
     | null;
   drift_threshold_hours: number | null;
+  warning_lead_hours: number | null;
   commitment_requirement:
     | "STANDARD"
     | "PASSIVE_ALIGNMENT"
@@ -100,6 +101,8 @@ function mapDomainRow(
     driftMode: row.drift_mode ?? DEFAULT_DOMAIN_SETTINGS.driftMode,
     driftThresholdHours:
       row.drift_threshold_hours ?? DEFAULT_DOMAIN_SETTINGS.driftThresholdHours,
+    warningLeadHours:
+      row.warning_lead_hours ?? DEFAULT_DOMAIN_SETTINGS.warningLeadHours,
     commitmentRequirement:
       row.commitment_requirement ??
       DEFAULT_DOMAIN_SETTINGS.commitmentRequirement,
@@ -133,7 +136,7 @@ export async function getDomains(
     .schema("axis")
     .from("domains")
     .select(
-      "id,user_id,name,slug,description,identity,primary_reason,primary_cost,next_move,vision,current_reality,standard,proof,color,status,drift_mode,drift_threshold_hours,commitment_requirement,orbit_speed,visual_intensity,planet_size_scale,orbit_eccentricity,last_passive_alignment_at,last_drift_warning_sent_at,last_drift_warning_activity_at,position_x,position_y,position_z,created_at,updated_at",
+      "id,user_id,name,slug,description,identity,primary_reason,primary_cost,next_move,vision,current_reality,standard,proof,color,status,drift_mode,drift_threshold_hours,warning_lead_hours,commitment_requirement,orbit_speed,visual_intensity,planet_size_scale,orbit_eccentricity,last_passive_alignment_at,last_drift_warning_sent_at,last_drift_warning_activity_at,position_x,position_y,position_z,created_at,updated_at",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: true });
