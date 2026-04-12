@@ -1,14 +1,19 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
-import { signIn, signOut } from "@/lib/auth";
-import bcrypt from "bcryptjs";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+
+type AuthResult = {
+  success: boolean;
+  error?: string;
+  message?: string;
+  pendingVerification?: boolean;
+};
 
 export async function signup(
   name: string,
   email: string,
   password: string,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<AuthResult> {
   const trimmedEmail = email.trim().toLowerCase();
   const trimmedName = name.trim();
 
@@ -16,44 +21,61 @@ export async function signup(
   if (!trimmedEmail) return { success: false, error: "Email is required." };
   if (password.length < 6) return { success: false, error: "Password must be at least 6 characters." };
 
-  const existing = await prisma.user.findUnique({ where: { email: trimmedEmail } });
-  if (existing) return { success: false, error: "An account with that email already exists." };
-
-  const hashed = await bcrypt.hash(password, 10);
-
-  await prisma.user.create({
-    data: {
-      name: trimmedName,
-      email: trimmedEmail,
-      password: hashed,
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.signUp({
+    email: trimmedEmail,
+    password,
+    options: {
+      data: {
+        name: trimmedName,
+      },
     },
   });
 
-  await signIn("credentials", {
-    email: trimmedEmail,
-    password,
-    redirect: false,
-  });
+  if (error) {
+    return {
+      success: false,
+      error: error.message || "Failed to create account.",
+    };
+  }
 
-  return { success: true };
+  if (!data.session) {
+    return {
+      success: true,
+      pendingVerification: true,
+      message: "Check your email to confirm your account.",
+    };
+  }
+
+  return {
+    success: true,
+  };
 }
 
 export async function login(
   email: string,
   password: string,
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    await signIn("credentials", {
-      email: email.trim().toLowerCase(),
-      password,
-      redirect: false,
-    });
-    return { success: true };
-  } catch {
+): Promise<AuthResult> {
+  const trimmedEmail = email.trim().toLowerCase();
+
+  if (!trimmedEmail) {
     return { success: false, error: "Invalid email or password." };
   }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.signInWithPassword({
+    email: trimmedEmail,
+    password,
+  });
+
+  if (error) {
+    return { success: false, error: "Invalid email or password." };
+  }
+
+  return { success: true };
 }
 
 export async function logout() {
-  await signOut({ redirect: false });
+  const supabase = await createSupabaseServerClient();
+  await supabase.auth.signOut();
 }

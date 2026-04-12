@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupError, setSignupError] = useState("");
+  const [signupMessage, setSignupMessage] = useState("");
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -22,11 +23,14 @@ export default function LoginPage() {
   function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     setSignupError("");
+    setSignupMessage("");
     startTransition(async () => {
       const result = await signup(signupName, signupEmail, signupPassword);
-      if (result.success) {
+      if (result.success && !result.pendingVerification) {
         router.push("/");
         router.refresh();
+      } else if (result.success) {
+        setSignupMessage(result.message || "Check your email to confirm your account.");
       } else {
         setSignupError(result.error || "Something went wrong.");
       }
@@ -136,6 +140,11 @@ export default function LoginPage() {
                 {signupError && (
                   <p className="text-xs font-mono text-red-400/80">
                     {signupError}
+                  </p>
+                )}
+                {signupMessage && (
+                  <p className="text-xs font-mono text-zinc-400">
+                    {signupMessage}
                   </p>
                 )}
                 <button
