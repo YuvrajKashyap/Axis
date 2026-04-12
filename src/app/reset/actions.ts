@@ -1,7 +1,7 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getSupabaseUser } from "@/lib/supabase-auth";
 import { revalidatePath } from "next/cache";
 
 type ResetCommitmentEntry = {
@@ -9,15 +9,15 @@ type ResetCommitmentEntry = {
   text: string;
 };
 
-type AllowedDomainRecord = {
+type AllowedDomainRow = {
   id: string;
 };
 
 export async function submitResetCommitments(
   entries: ResetCommitmentEntry[],
 ) {
-  const session = await auth();
-  const userId = session?.user?.id;
+  const user = await getSupabaseUser();
+  const userId = user?.id;
   if (!userId) return;
 
   const sanitizedEntries: ResetCommitmentEntry[] = entries
@@ -31,20 +31,23 @@ export async function submitResetCommitments(
     return;
   }
 
-  const allowedDomains: AllowedDomainRecord[] = await prisma.domain.findMany({
-    where: {
-      userId,
-      id: {
-        in: sanitizedEntries.map(
-          (entry: ResetCommitmentEntry) => entry.domainId,
-        ),
-      },
-    },
-    select: { id: true },
-  });
+  const supabase = await createSupabaseServerClient();
+  const { data: allowedDomains, error: allowedDomainsError } = await supabase
+    .schema("axis")
+    .from("domains")
+    .select("id")
+    .eq("user_id", userId)
+    .in(
+      "id",
+      sanitizedEntries.map((entry: ResetCommitmentEntry) => entry.domainId),
+    );
+
+  if (allowedDomainsError || !allowedDomains) {
+    return;
+  }
 
   const allowedDomainIds = new Set(
-    allowedDomains.map((domain: AllowedDomainRecord) => domain.id),
+    allowedDomains.map((domain: AllowedDomainRow) => domain.id),
   );
   const writableEntries = sanitizedEntries.filter((entry: ResetCommitmentEntry) =>
     allowedDomainIds.has(entry.domainId),
@@ -54,17 +57,20 @@ export async function submitResetCommitments(
     return;
   }
 
-  await Promise.all(
-    writableEntries.map((entry: ResetCommitmentEntry) =>
-      prisma.commitment.create({
-        data: {
-          domainId: entry.domainId,
-          text: entry.text,
-          userId,
-        },
-      }),
-    ),
-  );
+  const { error: insertError } = await supabase
+    .schema("axis")
+    .from("commitments")
+    .insert(
+      writableEntries.map((entry: ResetCommitmentEntry) => ({
+        domain_id: entry.domainId,
+        text: entry.text,
+        user_id: userId,
+      })),
+    );
+
+  if (insertError) {
+    throw new Error(`Failed to create reset commitments: ${insertError.message}`);
+  }
 
   revalidatePath("/", "layout");
 }
