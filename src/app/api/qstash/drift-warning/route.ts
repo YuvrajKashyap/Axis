@@ -32,5 +32,16 @@ export async function POST(request: Request) {
     expectedActivityAt: string;
   });
 
+  if (result.sent) {
+    console.info("Drift warning email sent", {
+      domainId: (payload as { domainId: string }).domainId,
+    });
+  } else {
+    console.info("Drift warning callback completed without send", {
+      domainId: (payload as { domainId: string }).domainId,
+      reason: result.reason,
+    });
+  }
+
   return NextResponse.json(result);
 }

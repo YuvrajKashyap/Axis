@@ -17,7 +17,13 @@ type CommitmentRecord = {
 
 async function scheduleDomainDriftWarningSafely(domainId: string) {
   try {
-    await scheduleDomainDriftWarning(domainId);
+    const result = await scheduleDomainDriftWarning(domainId);
+    if (!result.scheduled) {
+      console.warn("Drift warning was not scheduled after domain mutation", {
+        domainId,
+        reason: result.reason,
+      });
+    }
   } catch (error) {
     console.error("Failed to schedule drift warning after domain mutation", {
       domainId,
