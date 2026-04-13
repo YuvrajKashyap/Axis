@@ -101,7 +101,11 @@ export async function saveDomainSettings(
 
   try {
     const result = await scheduleDomainDriftWarning(domain.id);
-    if (!result.scheduled) {
+    if (result.reason === "processed-now") {
+      console.info("Drift warning processed immediately after settings save", {
+        domainId: domain.id,
+      });
+    } else if (!result.scheduled) {
       console.warn("Drift warning was not scheduled after settings save", {
         domainId: domain.id,
         reason: result.reason,
