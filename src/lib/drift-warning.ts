@@ -9,6 +9,7 @@ import {
   type DomainDriftModeValue,
 } from "@/lib/domain-settings";
 import { DEMO_USER_ID } from "@/lib/get-data";
+import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { Resend } from "resend";
 
@@ -76,6 +77,14 @@ function toDate(value: string | null): Date | null {
   return value ? new Date(value) : null;
 }
 
+async function createWarningDataClient() {
+  try {
+    return createSupabaseAdminClient();
+  } catch {
+    return createSupabaseServerClient();
+  }
+}
+
 async function getCurrentAuthenticatedEmailForUserId(userId: string) {
   const supabase = await createSupabaseServerClient();
   const {
@@ -89,11 +98,37 @@ async function getCurrentAuthenticatedEmailForUserId(userId: string) {
   return user.email;
 }
 
+async function getEmailForWarningRecipient(
+  userId: string,
+  recipientEmailHint?: string | null,
+) {
+  if (recipientEmailHint) {
+    return recipientEmailHint;
+  }
+
+  const sessionEmail = await getCurrentAuthenticatedEmailForUserId(userId);
+  if (sessionEmail) {
+    return sessionEmail;
+  }
+
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.auth.admin.getUserById(userId);
+    if (!error && data.user?.email) {
+      return data.user.email;
+    }
+  } catch {
+    // Fall back to null when admin lookup is unavailable.
+  }
+
+  return null;
+}
+
 async function getDomainWarningContext(
   domainId: string,
   recipientEmailHint?: string | null,
 ): Promise<DomainWarningContext | null> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createWarningDataClient();
   const { data: domain, error: domainError } = await supabase
     .schema("axis")
     .from("domains")
@@ -125,9 +160,10 @@ async function getDomainWarningContext(
     );
   }
 
-  const recipientEmail =
-    recipientEmailHint ??
-    (await getCurrentAuthenticatedEmailForUserId(domain.user_id));
+  const recipientEmail = await getEmailForWarningRecipient(
+    domain.user_id,
+    recipientEmailHint,
+  );
 
   return {
     id: domain.id,
@@ -336,7 +372,7 @@ export async function processDomainDriftWarning(
     return sendResult;
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createWarningDataClient();
   const { error: updateError } = await supabase
     .schema("axis")
     .from("domains")
@@ -420,6 +456,13 @@ export async function scheduleDomainDriftWarning(domainId: string) {
     },
     delay: delaySeconds,
     retries: 3,
+  });
+
+  console.info("Drift warning scheduled", {
+    domainId: domain.id,
+    warningAt: warning.warningAt.toISOString(),
+    expectedActivityAt: currentActivityAt.toISOString(),
+    delaySeconds,
   });
 
   return { scheduled: true as const };
