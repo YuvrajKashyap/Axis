@@ -175,8 +175,7 @@ async function getDomainWarningContext(
     driftThresholdHours:
       domain.drift_threshold_hours ??
       DEFAULT_DOMAIN_SETTINGS.driftThresholdHours,
-    warningLeadHours:
-      domain.warning_lead_hours ?? DEFAULT_DOMAIN_SETTINGS.warningLeadHours,
+    warningLeadHours: domain.warning_lead_hours,
     commitmentRequirement:
       domain.commitment_requirement ??
       DEFAULT_DOMAIN_SETTINGS.commitmentRequirement,
