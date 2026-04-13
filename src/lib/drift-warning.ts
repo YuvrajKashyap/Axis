@@ -33,6 +33,14 @@ type DriftWarningPayload = {
   recipientEmail?: string;
 };
 
+type WarningScheduleOverrides = {
+  status?: "ALIGNED" | "NEUTRAL" | "DRIFTING" | "ARCHIVED";
+  lastCommitmentAt?: Date | null;
+  lastCommitmentText?: string | null;
+  lastPassiveAlignmentAt?: Date | null;
+  recipientEmail?: string | null;
+};
+
 type DomainWarningContext = {
   id: string;
   name: string;
@@ -127,6 +135,7 @@ async function getEmailForWarningRecipient(
 async function getDomainWarningContext(
   domainId: string,
   recipientEmailHint?: string | null,
+  overrides?: WarningScheduleOverrides,
 ): Promise<DomainWarningContext | null> {
   const supabase = await createWarningDataClient();
   const { data: domain, error: domainError } = await supabase
@@ -146,30 +155,44 @@ async function getDomainWarningContext(
     return null;
   }
 
-  const { data: commitments, error: commitmentsError } = await supabase
-    .schema("axis")
-    .from("commitments")
-    .select("created_at, text")
-    .eq("domain_id", domainId)
-    .order("created_at", { ascending: false })
-    .limit(1);
+  let commitments: CommitmentRow[] = [];
+  if (overrides?.lastCommitmentAt !== undefined) {
+    commitments = overrides.lastCommitmentAt
+      ? [
+          {
+            created_at: overrides.lastCommitmentAt.toISOString(),
+            text: overrides.lastCommitmentText ?? "",
+          },
+        ]
+      : [];
+  } else {
+    const { data: commitmentRows, error: commitmentsError } = await supabase
+      .schema("axis")
+      .from("commitments")
+      .select("created_at, text")
+      .eq("domain_id", domainId)
+      .order("created_at", { ascending: false })
+      .limit(1);
 
-  if (commitmentsError) {
-    throw new Error(
-      `Failed to load drift warning commitments: ${commitmentsError.message}`,
-    );
+    if (commitmentsError) {
+      throw new Error(
+        `Failed to load drift warning commitments: ${commitmentsError.message}`,
+      );
+    }
+
+    commitments = (commitmentRows ?? []) as CommitmentRow[];
   }
 
   const recipientEmail = await getEmailForWarningRecipient(
     domain.user_id,
-    recipientEmailHint,
+    overrides?.recipientEmail ?? recipientEmailHint,
   );
 
   return {
     id: domain.id,
     name: domain.name,
     slug: domain.slug,
-    status: domain.status,
+    status: overrides?.status ?? domain.status,
     userId: domain.user_id,
     driftMode: domain.drift_mode ?? DEFAULT_DOMAIN_SETTINGS.driftMode,
     driftThresholdHours:
@@ -179,11 +202,12 @@ async function getDomainWarningContext(
     commitmentRequirement:
       domain.commitment_requirement ??
       DEFAULT_DOMAIN_SETTINGS.commitmentRequirement,
-    lastPassiveAlignmentAt: toDate(domain.last_passive_alignment_at),
+    lastPassiveAlignmentAt:
+      overrides?.lastPassiveAlignmentAt ?? toDate(domain.last_passive_alignment_at),
     lastDriftWarningSentAt: toDate(domain.last_drift_warning_sent_at),
     lastDriftWarningActivityAt: toDate(domain.last_drift_warning_activity_at),
     recipientEmail,
-    commitments: ((commitments ?? []) as CommitmentRow[]).map((commitment) => ({
+    commitments: commitments.map((commitment) => ({
       createdAt: new Date(commitment.created_at),
       text: commitment.text,
     })),
@@ -246,7 +270,14 @@ function buildWarningPayload(
 }
 
 function getAppBaseUrl() {
-  return process.env.APP_BASE_URL?.replace(/\/$/, "") ?? null;
+  const configured = process.env.APP_BASE_URL?.trim();
+  if (configured) {
+    return configured.replace(/\/$/, "");
+  }
+
+  return process.env.NODE_ENV === "production"
+    ? "https://axis.yuvrajkashyap.com"
+    : "http://localhost:3000";
 }
 
 function buildDomainUrl(slug: string) {
@@ -391,8 +422,15 @@ export async function processDomainDriftWarning(
   return { sent: true as const };
 }
 
-export async function scheduleDomainDriftWarning(domainId: string) {
-  const domain = await getDomainWarningContext(domainId);
+export async function scheduleDomainDriftWarning(
+  domainId: string,
+  overrides?: WarningScheduleOverrides,
+) {
+  const domain = await getDomainWarningContext(
+    domainId,
+    overrides?.recipientEmail ?? null,
+    overrides,
+  );
   if (!domain) {
     return { scheduled: false, reason: "domain-not-found" as const };
   }
