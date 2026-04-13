@@ -54,7 +54,7 @@ export async function getPublicDemoOrrery(): Promise<DomainData[]> {
       const settings = normalizeDomainSettings({
         driftMode: domain.drift_mode ?? undefined,
         driftThresholdHours: domain.drift_threshold_hours ?? undefined,
-        warningLeadHours: domain.warning_lead_hours ?? undefined,
+        warningLeadHours: domain.warning_lead_hours,
         commitmentRequirement: domain.commitment_requirement ?? undefined,
         orbitSpeed: domain.orbit_speed ?? undefined,
         visualIntensity: domain.visual_intensity ?? undefined,

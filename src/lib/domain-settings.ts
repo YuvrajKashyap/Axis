@@ -108,9 +108,12 @@ export function getEffectiveWarningLeadHours(
     "driftMode" | "driftThresholdHours" | "warningLeadHours"
   >,
 ): number | null {
-  if (settings.driftMode === "NEVER") return null;
+  const driftThresholdHours = getEffectiveDriftThresholdHours(settings);
+  if (driftThresholdHours === null) return null;
   if (settings.warningLeadHours === null) return null;
-  return clampWarningLeadHours(settings.warningLeadHours);
+
+  const warningLeadHours = clampWarningLeadHours(settings.warningLeadHours);
+  return warningLeadHours > driftThresholdHours ? null : warningLeadHours;
 }
 
 export function validateWarningLeadHours(

@@ -101,8 +101,7 @@ function mapDomainRow(
     driftMode: row.drift_mode ?? DEFAULT_DOMAIN_SETTINGS.driftMode,
     driftThresholdHours:
       row.drift_threshold_hours ?? DEFAULT_DOMAIN_SETTINGS.driftThresholdHours,
-    warningLeadHours:
-      row.warning_lead_hours ?? DEFAULT_DOMAIN_SETTINGS.warningLeadHours,
+    warningLeadHours: row.warning_lead_hours,
     commitmentRequirement:
       row.commitment_requirement ??
       DEFAULT_DOMAIN_SETTINGS.commitmentRequirement,
