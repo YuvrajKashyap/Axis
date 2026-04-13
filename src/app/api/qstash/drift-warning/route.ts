@@ -26,22 +26,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const result = await processDomainDriftWarning(payload as {
-    domainId: string;
-    expectedWarningAt: string;
-    expectedActivityAt: string;
-  });
+  try {
+    const result = await processDomainDriftWarning(payload as {
+      domainId: string;
+      expectedWarningAt: string;
+      expectedActivityAt: string;
+    });
 
-  if (result.sent) {
-    console.info("Drift warning email sent", {
+    if (result.sent) {
+      console.info("Drift warning email sent", {
+        domainId: (payload as { domainId: string }).domainId,
+      });
+    } else {
+      console.info("Drift warning callback completed without send", {
+        domainId: (payload as { domainId: string }).domainId,
+        reason: result.reason,
+      });
+    }
+
+    return NextResponse.json(result);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown callback error";
+
+    console.error("Drift warning callback failed", {
       domainId: (payload as { domainId: string }).domainId,
+      error: message,
     });
-  } else {
-    console.info("Drift warning callback completed without send", {
-      domainId: (payload as { domainId: string }).domainId,
-      reason: result.reason,
-    });
+
+    return NextResponse.json(
+      { error: "Drift warning callback failed", details: message },
+      { status: 500 },
+    );
   }
-
-  return NextResponse.json(result);
 }
