@@ -18,7 +18,11 @@ type CommitmentRecord = {
 async function scheduleDomainDriftWarningSafely(domainId: string) {
   try {
     const result = await scheduleDomainDriftWarning(domainId);
-    if (!result.scheduled) {
+    if (result.reason === "processed-now") {
+      console.info("Drift warning processed immediately after domain mutation", {
+        domainId,
+      });
+    } else if (!result.scheduled) {
       console.warn("Drift warning was not scheduled after domain mutation", {
         domainId,
         reason: result.reason,
