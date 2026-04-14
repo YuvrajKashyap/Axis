@@ -90,10 +90,10 @@ export default function LoginPage() {
   const inputClass =
     "w-full bg-zinc-900/50 border border-zinc-800 focus:border-zinc-600 outline-none px-4 py-3 text-sm text-zinc-200 rounded-lg transition-colors font-mono placeholder:text-zinc-700";
   const labelClass =
-    "block text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-500 mb-2";
+    "block text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-400 mb-2";
   const passwordInputClass = `${inputClass} pr-14`;
   const eyeButtonClass =
-    "absolute inset-y-0 right-0 flex items-center px-4 text-zinc-600 transition-colors hover:text-zinc-300";
+    "absolute inset-y-0 right-0 flex items-center px-4 text-zinc-500 transition-colors hover:text-zinc-300";
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center bg-black text-zinc-200">
@@ -102,7 +102,7 @@ export default function LoginPage() {
       <header className="absolute top-10 left-1/2 -translate-x-1/2">
         <Link
           href="/"
-          className="font-mono text-[11px] tracking-[0.5em] uppercase text-zinc-500 transition-colors hover:text-zinc-300"
+          className="font-mono text-[11px] tracking-[0.5em] uppercase text-zinc-400 transition-colors hover:text-zinc-300"
         >
           AXIS
         </Link>
@@ -116,7 +116,7 @@ export default function LoginPage() {
               className={`flex-1 rounded-md py-2 text-[10px] font-mono tracking-[0.3em] uppercase transition-colors ${
                 mode === "signup"
                   ? "bg-zinc-800 text-zinc-100"
-                  : "text-zinc-600 hover:text-zinc-400"
+                  : "text-zinc-500 hover:text-zinc-300"
               }`}
             >
               Create Account
@@ -126,7 +126,7 @@ export default function LoginPage() {
               className={`flex-1 rounded-md py-2 text-[10px] font-mono tracking-[0.3em] uppercase transition-colors ${
                 mode === "login"
                   ? "bg-zinc-800 text-zinc-100"
-                  : "text-zinc-600 hover:text-zinc-400"
+                  : "text-zinc-500 hover:text-zinc-300"
               }`}
             >
               Sign In
@@ -138,7 +138,7 @@ export default function LoginPage() {
               <h2 className="mb-1 font-[family-name:var(--font-playfair)] text-2xl italic text-zinc-100">
                 Begin your orbit
               </h2>
-              <p className="mb-8 text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-600">
+              <p className="mb-8 text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-500">
                 Create your personal axis
               </p>
               <form onSubmit={handleSignup} className="space-y-4">
@@ -244,7 +244,7 @@ export default function LoginPage() {
               <h2 className="mb-1 font-[family-name:var(--font-playfair)] text-2xl italic text-zinc-100">
                 Welcome back
               </h2>
-              <p className="mb-8 text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-600">
+              <p className="mb-8 text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-500">
                 Return to your orbit
               </p>
               <form onSubmit={handleLogin} className="space-y-4">

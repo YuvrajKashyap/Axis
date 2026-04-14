@@ -33,7 +33,7 @@ export function ResetFlow({ domains }: { domains: ResetDomain[] }) {
           <p className="text-zinc-400 text-sm">No active domains to reset.</p>
           <Link
             href="/"
-            className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-600 border border-zinc-800 rounded-full px-5 py-2 transition hover:border-zinc-600 hover:text-zinc-400"
+            className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-500 border border-zinc-700 rounded-full px-5 py-2 transition hover:border-zinc-500 hover:text-zinc-300"
           >
             ← Back to Axis
           </Link>
@@ -48,7 +48,7 @@ export function ResetFlow({ domains }: { domains: ResetDomain[] }) {
       <main className="min-h-screen bg-black text-white flex items-center justify-center px-6">
         <div className="max-w-lg w-full space-y-8">
           <div className="text-center space-y-2">
-            <p className="text-[11px] font-mono tracking-[0.5em] uppercase text-zinc-500">
+            <p className="text-[11px] font-mono tracking-[0.5em] uppercase text-zinc-400">
               Alignment locked
             </p>
             <h1 className="text-2xl font-semibold tracking-tight">
@@ -77,10 +77,10 @@ export function ResetFlow({ domains }: { domains: ResetDomain[] }) {
           </div>
 
           <div className="text-center pt-4">
-            <p className="text-sm text-zinc-400 mb-6">Now execute. No negotiation.</p>
+            <p className="text-sm text-zinc-300 mb-6">Now execute. No negotiation.</p>
             <Link
               href="/"
-              className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-500 border border-zinc-800 rounded-full px-6 py-2.5 transition hover:border-zinc-600 hover:text-zinc-300"
+              className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-400 border border-zinc-700 rounded-full px-6 py-2.5 transition hover:border-zinc-500 hover:text-zinc-200"
             >
               Back to Axis
             </Link>
@@ -150,11 +150,11 @@ export function ResetFlow({ domains }: { domains: ResetDomain[] }) {
         <div className="flex items-center justify-between mb-12">
           <Link
             href="/"
-            className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-700 transition hover:text-zinc-400"
+            className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-500 transition hover:text-zinc-300"
           >
             ← Exit
           </Link>
-          <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-600">
+          <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-500">
             {step + 1} / {total}
           </p>
         </div>
@@ -181,7 +181,7 @@ export function ResetFlow({ domains }: { domains: ResetDomain[] }) {
           </p>
 
           {current.identity && (
-            <p className="text-xs text-zinc-500 leading-relaxed">
+            <p className="text-xs text-zinc-400 leading-relaxed">
               {current.identity}
             </p>
           )}
@@ -218,7 +218,7 @@ export function ResetFlow({ domains }: { domains: ResetDomain[] }) {
           <button
             onClick={handleSkip}
             disabled={isPending}
-            className="text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-600 transition hover:text-zinc-400 disabled:opacity-40"
+            className="text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-500 transition hover:text-zinc-300 disabled:opacity-40"
           >
             Skip
           </button>
@@ -227,7 +227,7 @@ export function ResetFlow({ domains }: { domains: ResetDomain[] }) {
             {step > 0 && (
               <button
                 onClick={() => setStep((s) => s - 1)}
-                className="text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-600 transition hover:text-zinc-400"
+                className="text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-500 transition hover:text-zinc-300"
               >
                 ← Back
               </button>
