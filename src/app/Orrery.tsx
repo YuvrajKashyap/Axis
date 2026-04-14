@@ -1019,9 +1019,9 @@ export function Orrery({
         {/* Header */}
         <header className="relative z-30 flex items-center justify-between px-5 md:px-12 py-4 md:py-6">
           <h1 className="text-[11px] font-mono tracking-[0.5em] uppercase flex items-center gap-3 md:gap-4">
-            <span className="text-zinc-500">Axis</span>
-            <span className="text-zinc-800 hidden sm:inline">|</span>
-            <span className="text-zinc-700 tracking-[0.3em] text-[9px] hidden sm:inline">Yuvraj Kashyap</span>
+            <span className="text-zinc-400">Axis</span>
+            <span className="text-zinc-700 hidden sm:inline">|</span>
+            <span className="text-zinc-500 tracking-[0.3em] text-[9px] hidden sm:inline">Yuvraj Kashyap</span>
           </h1>
           <div className="flex items-center gap-4 md:gap-6">
             {!isDemo && (
@@ -1029,20 +1029,20 @@ export function Orrery({
                 {isAdmin && (
                   <Link
                     href={editingDemo ? "/" : "/?demo=edit"}
-                    className="text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-800 hover:text-zinc-500 active:text-zinc-500 transition-colors duration-500"
+                    className="text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-600 hover:text-zinc-300 active:text-zinc-300 transition-colors duration-500"
                   >
                     {editingDemo ? "My orrery" : "Edit demo"}
                   </Link>
                 )}
                 <button
                   onClick={async () => { await logout(); router.push("/"); router.refresh(); }}
-                  className="text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-800 hover:text-zinc-500 active:text-zinc-500 transition-colors duration-500"
+                  className="text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-600 hover:text-zinc-300 active:text-zinc-300 transition-colors duration-500"
                 >
                   Log out
                 </button>
                 <button
                   onClick={() => { setShowCreate(true); setNewDomainName(""); setCreateError(""); }}
-                  className="add-domain-btn w-7 h-7 rounded-full border border-zinc-800 text-zinc-700 transition-all duration-500"
+                  className="add-domain-btn w-7 h-7 rounded-full border border-zinc-700 text-zinc-500 transition-all duration-500"
                   title="Add domain"
                 >
                   <svg width="100%" height="100%" viewBox="0 0 28 28" fill="none">
@@ -1055,20 +1055,20 @@ export function Orrery({
             {isDemo && (
               <Link
                 href="/login"
-                className="mr-8 md:mr-12 text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-700 hover:text-zinc-400 active:text-zinc-400 transition-colors duration-500"
+                className="mr-8 md:mr-12 text-[10px] font-mono tracking-[0.3em] uppercase text-zinc-500 hover:text-zinc-200 active:text-zinc-200 transition-colors duration-500"
               >
                 Create an account / login
               </Link>
             )}
             <div className="hidden sm:flex flex-col items-end gap-1">
-              <p className="text-[10px] font-mono tracking-[0.4em] uppercase text-zinc-700">
+              <p className="text-[10px] font-mono tracking-[0.4em] uppercase text-zinc-500">
                 Open → Align → Execute
               </p>
               <Link
                 href="/how"
-                className="group inline-flex items-center gap-2 text-[8px] font-mono tracking-[0.32em] uppercase text-zinc-500 hover:text-zinc-200 active:text-zinc-200 transition-colors duration-500 border-b border-dashed border-zinc-500/55 hover:border-zinc-200/55 pb-px"
+                className="group inline-flex items-center gap-2 text-[8px] font-mono tracking-[0.32em] uppercase text-zinc-400 hover:text-zinc-200 active:text-zinc-200 transition-colors duration-500 border-b border-dashed border-zinc-400/55 hover:border-zinc-200/55 pb-px"
               >
-                <span aria-hidden className="h-1 w-1 rounded-full bg-zinc-500/80 transition-colors duration-500 group-hover:bg-zinc-200/80" />
+                <span aria-hidden className="h-1 w-1 rounded-full bg-zinc-400/80 transition-colors duration-500 group-hover:bg-zinc-200/80" />
                 <span>How does this work?</span>
                 <span aria-hidden className="text-zinc-600 transition-colors duration-500 group-hover:text-zinc-300">↗</span>
               </Link>

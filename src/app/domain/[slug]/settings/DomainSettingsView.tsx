@@ -629,7 +629,7 @@ export function DomainSettingsView({
           <div className="flex min-w-0 items-center gap-4 sm:gap-6">
             <Link
               href={homeHref}
-              className="inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-600 transition-colors hover:text-zinc-300"
+              className="inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-500 transition-colors hover:text-zinc-300"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
                 <path
@@ -645,7 +645,7 @@ export function DomainSettingsView({
             <div className="h-4 w-px bg-white/[0.06]" />
             <Link
               href={backHref}
-              className="inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-600 transition-colors hover:text-zinc-300"
+              className="inline-flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-500 transition-colors hover:text-zinc-300"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
                 <path
@@ -661,7 +661,7 @@ export function DomainSettingsView({
           </div>
 
           <div className="min-w-0 text-right">
-            <p className="text-[9px] font-mono uppercase tracking-[0.4em] text-zinc-600">
+            <p className="text-[9px] font-mono uppercase tracking-[0.4em] text-zinc-500">
               Planet Settings
             </p>
             <h1
@@ -677,7 +677,7 @@ export function DomainSettingsView({
       <div className="mx-auto grid max-w-[1400px] lg:grid-cols-[280px_1fr]">
         <aside className="border-b border-white/[0.04] px-5 pb-8 pt-10 sm:px-8 lg:sticky lg:top-[73px] lg:h-[calc(100vh-73px)] lg:overflow-y-auto lg:border-b-0 lg:border-r">
           <div>
-            <p className="mb-3 text-[8px] font-mono uppercase tracking-[0.5em] text-zinc-700">
+            <p className="mb-3 text-[8px] font-mono uppercase tracking-[0.5em] text-zinc-500">
               Sections
             </p>
             <div className="space-y-[1px]">
@@ -692,7 +692,7 @@ export function DomainSettingsView({
                     className={`relative flex w-full items-center gap-3 rounded px-3 py-2.5 text-left transition-all duration-150 ${
                       active
                         ? ""
-                        : "text-zinc-600 hover:bg-white/[0.02] hover:text-zinc-400"
+                        : "text-zinc-500 hover:bg-white/[0.02] hover:text-zinc-300"
                     }`}
                     style={
                       active
@@ -730,13 +730,13 @@ export function DomainSettingsView({
           </div>
 
           <div className="mt-10 space-y-4">
-            <p className="mb-3 text-[9px] font-mono uppercase tracking-[0.4em] text-zinc-700">
+            <p className="mb-3 text-[9px] font-mono uppercase tracking-[0.4em] text-zinc-500">
               Current Configuration
             </p>
             <div className="h-px bg-white/[0.04]" />
             {currentConfigItems.map((item) => (
               <div key={item.label} className="flex items-center justify-between py-1">
-                <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-700">
+                <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">
                   {item.label}
                 </span>
                 <span className="text-[10px] font-mono text-zinc-300">
@@ -843,7 +843,7 @@ export function DomainSettingsView({
               Restore to defaults
             </button>
             {statusLabel ? (
-              <p className="mt-3 text-center text-[9px] font-mono uppercase tracking-[0.22em] text-zinc-700">
+              <p className="mt-3 text-center text-[9px] font-mono uppercase tracking-[0.22em] text-zinc-500">
                 {statusLabel}
               </p>
             ) : null}
@@ -855,8 +855,8 @@ export function DomainSettingsView({
             {activeTab === "behavior" ? (
               <div>
                 <div className="mb-1 flex items-baseline gap-3">
-                  <span className="text-[9px] font-mono text-zinc-700">01</span>
-                  <p className="text-[9px] font-mono uppercase tracking-[0.5em] text-zinc-600">
+                  <span className="text-[9px] font-mono text-zinc-500">01</span>
+                  <p className="text-[9px] font-mono uppercase tracking-[0.5em] text-zinc-500">
                     Behavior
                   </p>
                   <div className="ml-3 h-px flex-1 bg-white/[0.06]" />
@@ -917,7 +917,7 @@ export function DomainSettingsView({
                           background: `linear-gradient(90deg, rgba(255,255,255,0.1), ${withAlpha(accentColor, 0.28)}, rgba(255,255,255,0.08))`,
                         }}
                       />
-                      <div className="mt-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.22em] text-zinc-600">
+                      <div className="mt-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.22em] text-zinc-500">
                         <span>1 {customUnit === "days" ? "day" : "hour"}</span>
                         <span>
                           {customValue} {customUnit}
@@ -1023,7 +1023,7 @@ export function DomainSettingsView({
                             background: `linear-gradient(90deg, rgba(255,255,255,0.1), ${withAlpha(accentColor, 0.28)}, rgba(255,255,255,0.08))`,
                           }}
                         />
-                        <div className="mt-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.22em] text-zinc-600">
+                        <div className="mt-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.22em] text-zinc-500">
                           <span>
                             1 {warningCustomUnit === "days" ? "day" : "hour"}
                           </span>
@@ -1040,7 +1040,7 @@ export function DomainSettingsView({
                     ) : null}
 
                     {isWarningDisabled ? (
-                      <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-700">
+                      <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">
                         Warnings are off while drift is set to Never.
                       </p>
                     ) : null}
@@ -1085,8 +1085,8 @@ export function DomainSettingsView({
             {activeTab === "motion" ? (
               <div>
                 <div className="mb-1 flex items-baseline gap-3">
-                  <span className="text-[9px] font-mono text-zinc-700">02</span>
-                  <p className="text-[9px] font-mono uppercase tracking-[0.5em] text-zinc-600">
+                  <span className="text-[9px] font-mono text-zinc-500">02</span>
+                  <p className="text-[9px] font-mono uppercase tracking-[0.5em] text-zinc-500">
                     Motion
                   </p>
                   <div className="ml-3 h-px flex-1 bg-white/[0.06]" />
@@ -1156,8 +1156,8 @@ export function DomainSettingsView({
             {activeTab === "visual" ? (
               <div>
                 <div className="mb-1 flex items-baseline gap-3">
-                  <span className="text-[9px] font-mono text-zinc-700">03</span>
-                  <p className="text-[9px] font-mono uppercase tracking-[0.5em] text-zinc-600">
+                  <span className="text-[9px] font-mono text-zinc-500">03</span>
+                  <p className="text-[9px] font-mono uppercase tracking-[0.5em] text-zinc-500">
                     Visual
                   </p>
                   <div className="ml-3 h-px flex-1 bg-white/[0.06]" />
@@ -1207,11 +1207,11 @@ export function DomainSettingsView({
                 >
                     <div>
                       <div className="mb-3 flex items-center justify-between">
-                        <span className="text-[10px] font-mono text-zinc-600">30%</span>
+                        <span className="text-[10px] font-mono text-zinc-500">30%</span>
                       <span className="text-[11px] font-mono" style={{ color: accentColor }}>
                         {Math.round(planetSizeScale * 100)}%
                       </span>
-                      <span className="text-[10px] font-mono text-zinc-600">170%</span>
+                      <span className="text-[10px] font-mono text-zinc-500">170%</span>
                     </div>
                     <input
                       type="range"

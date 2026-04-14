@@ -7,7 +7,7 @@ export default function HowItWorksPage() {
       <header className="flex items-center justify-center pt-12 pb-4">
         <Link
           href="/"
-          className="font-mono text-[11px] tracking-[0.5em] uppercase text-zinc-500 hover:text-zinc-300 transition-colors"
+          className="font-mono text-[11px] tracking-[0.5em] uppercase text-zinc-400 hover:text-zinc-300 transition-colors"
         >
           AXIS
         </Link>
@@ -18,7 +18,7 @@ export default function HowItWorksPage() {
         <h1 className="font-[family-name:var(--font-playfair)] italic text-4xl md:text-5xl text-zinc-100 mb-4 text-center leading-tight">
           How it works
         </h1>
-        <p className="text-center text-[11px] font-mono tracking-[0.3em] uppercase text-zinc-600 mb-20">
+        <p className="text-center text-[11px] font-mono tracking-[0.3em] uppercase text-zinc-500 mb-20">
           A personal alignment system
         </p>
 
@@ -26,7 +26,7 @@ export default function HowItWorksPage() {
         <div className="space-y-20">
           {/* What is Axis */}
           <section>
-            <h2 className="font-mono text-[11px] tracking-[0.4em] uppercase text-zinc-500 mb-4">
+            <h2 className="font-mono text-[11px] tracking-[0.4em] uppercase text-zinc-400 mb-4">
               What is Axis
             </h2>
             <p className="text-zinc-400 leading-relaxed text-[15px]">
@@ -39,19 +39,19 @@ export default function HowItWorksPage() {
 
           {/* The Loop */}
           <section>
-            <h2 className="font-mono text-[11px] tracking-[0.4em] uppercase text-zinc-500 mb-4">
+            <h2 className="font-mono text-[11px] tracking-[0.4em] uppercase text-zinc-400 mb-4">
               The Loop
             </h2>
             <div className="space-y-6">
               <div className="flex gap-6 items-start">
-                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-16">Open</span>
+                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-500 mt-1 shrink-0 w-16">Open</span>
                 <p className="text-zinc-400 leading-relaxed text-[15px]">
                   Look at your system. See which planets are close, which ones have drifted.
                   No judgment. Just awareness of where you stand.
                 </p>
               </div>
               <div className="flex gap-6 items-start">
-                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-16">Align</span>
+                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-500 mt-1 shrink-0 w-16">Align</span>
                 <p className="text-zinc-400 leading-relaxed text-[15px]">
                   Click Align to move through your active domains one by one.
                   For each one, lock in the single next thing you will do.
@@ -59,7 +59,7 @@ export default function HowItWorksPage() {
                 </p>
               </div>
               <div className="flex gap-6 items-start">
-                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-600 mt-1 shrink-0 w-16">Execute</span>
+                <span className="font-mono text-[11px] tracking-[0.3em] uppercase text-zinc-500 mt-1 shrink-0 w-16">Execute</span>
                 <p className="text-zinc-400 leading-relaxed text-[15px]">
                   Go do it. Come back when you&apos;re ready for the next one.
                 </p>
@@ -69,7 +69,7 @@ export default function HowItWorksPage() {
 
           {/* How to Use Axis */}
           <section>
-            <h2 className="font-mono text-[11px] tracking-[0.4em] uppercase text-zinc-500 mb-4">
+            <h2 className="font-mono text-[11px] tracking-[0.4em] uppercase text-zinc-400 mb-4">
               How to use Axis
             </h2>
             <p className="text-zinc-400 leading-relaxed text-[15px] mb-10">

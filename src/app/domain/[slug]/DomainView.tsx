@@ -679,13 +679,13 @@ export function DomainView({
           <div className="mx-auto flex w-full max-w-6xl items-start justify-between gap-4 sm:items-center">
             <Link
               href={homeUrl}
-              className="shrink-0 py-2 text-[10px] md:text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-700 hover:text-zinc-400 active:text-zinc-400 transition-colors"
+              className="shrink-0 py-2 text-[10px] md:text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-500 hover:text-zinc-300 active:text-zinc-300 transition-colors"
             >
               ← Axis
             </Link>
             <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2 text-right md:gap-x-6">
               {isAligning && (
-                <p className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-700">
+                <p className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-500">
                   {alignIdx + 1} / {alignChain!.length}
                 </p>
               )}
@@ -700,19 +700,19 @@ export function DomainView({
               ) : (
                 <button
                   onClick={() => setEditing(true)}
-                  className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-800 hover:text-zinc-500 transition-colors"
+                  className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-600 hover:text-zinc-300 transition-colors"
                 >
                   Edit
                 </button>
               )}
               {editing ? (
-                <span className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-900/70">
+                <span className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-600/80">
                   Settings
                 </span>
               ) : (
                 <Link
                   href={settingsHref}
-                  className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-800 hover:text-zinc-500 transition-colors"
+                  className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-600 hover:text-zinc-300 transition-colors"
                 >
                   Settings
                 </Link>
@@ -762,7 +762,7 @@ export function DomainView({
             )}
             {!editing && domain.identity ? (
               <p
-                className={`mt-5 max-w-sm text-sm text-zinc-600 text-center transition-all duration-1000 ${
+                className={`mt-5 max-w-sm text-sm text-zinc-500 text-center transition-all duration-1000 ${
                   mounted ? "opacity-100" : "opacity-0"
                 }`}
                 style={{ transitionDelay: "600ms" }}
@@ -801,7 +801,7 @@ export function DomainView({
                       onClick={() => handleStatusChange(status)}
                       disabled={isPending}
                       className={`py-1 text-[9px] font-mono tracking-[0.2em] uppercase transition-all duration-500 ${
-                        isActive ? "" : "text-zinc-800 hover:text-zinc-600 active:text-zinc-600"
+                        isActive ? "" : "text-zinc-600 hover:text-zinc-400 active:text-zinc-400"
                       } ${isPending ? "opacity-50" : ""}`}
                       style={{
                         color: isActive
@@ -826,18 +826,18 @@ export function DomainView({
                 {!confirmDelete ? (
                   <button
                     onClick={() => setConfirmDelete(true)}
-                    className="text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-800 hover:text-red-400/50 transition-colors duration-500"
+                    className="text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-600 hover:text-red-400/60 transition-colors duration-500"
                   >
                     Delete domain
                   </button>
                 ) : (
                   <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
-                    <p className="text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-600">
+                    <p className="text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-500">
                       Are you sure?
                     </p>
                     <button
                       onClick={() => setConfirmDelete(false)}
-                      className="text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-700 hover:text-zinc-500 transition-colors"
+                      className="text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-500 hover:text-zinc-300 transition-colors"
                     >
                       Cancel
                     </button>
@@ -962,7 +962,7 @@ export function DomainView({
               }}
             />
             <div>
-              <p className="text-[11px] font-mono tracking-[0.25em] uppercase text-zinc-600 leading-relaxed">
+              <p className="text-[11px] font-mono tracking-[0.25em] uppercase text-zinc-500 leading-relaxed">
                 {effectiveDriftThresholdHours === null
                   ? "Auto-drift is deactivated"
                   : `${formatDriftThresholdLabel(effectiveDriftThresholdHours)} without ${
@@ -970,7 +970,7 @@ export function DomainView({
                     }`}
               </p>
               <p
-                className="text-sm mt-2 tracking-wide text-zinc-700 italic leading-relaxed"
+                className="text-sm mt-2 tracking-wide text-zinc-500 italic leading-relaxed"
                 style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
               >
                 {effectiveDriftThresholdHours === null
@@ -1018,7 +1018,7 @@ export function DomainView({
               {isAligning && (
                 <button
                   onClick={handleSkip}
-                  className="text-[10px] font-mono tracking-[0.4em] uppercase text-zinc-700 transition-colors duration-500 hover:text-zinc-500"
+                  className="text-[10px] font-mono tracking-[0.4em] uppercase text-zinc-500 transition-colors duration-500 hover:text-zinc-300"
                 >
                   Skip →
                 </button>
@@ -1038,7 +1038,7 @@ export function DomainView({
               <div className="mt-16">
                 <button
                   onClick={toggleHistory}
-                  className="text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-800 transition-colors hover:text-zinc-600"
+                  className="text-[9px] font-mono tracking-[0.3em] uppercase text-zinc-600 transition-colors hover:text-zinc-400"
                 >
                   {showHistory
                     ? "Hide history"
@@ -1062,7 +1062,7 @@ export function DomainView({
                         <p className="text-[12px] text-zinc-500 leading-relaxed">
                           {commitment.text}
                         </p>
-                        <p className="text-[9px] font-mono text-zinc-800 mt-1">
+                        <p className="text-[9px] font-mono text-zinc-600 mt-1">
                           {formatDate(commitment.createdAt)}
                         </p>
                       </div>
@@ -1072,7 +1072,7 @@ export function DomainView({
                   <button
                     onClick={handleClear}
                     disabled={clearing}
-                    className="mt-4 text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-800 transition-colors hover:text-red-400/60 disabled:opacity-30"
+                    className="mt-4 text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-600 transition-colors hover:text-red-400/60 disabled:opacity-30"
                   >
                     {clearing ? "Clearing..." : "Clear history"}
                   </button>
@@ -1086,7 +1086,7 @@ export function DomainView({
                 className="w-8 h-px shrink-0"
                 style={{ background: `linear-gradient(to right, transparent, rgba(${r},${g},${b},0.15))` }}
               />
-              <p className="text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-700">
+              <p className="text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-500">
                 {effectiveDriftThresholdHours === null
                   ? "drift deactivated"
                   : `${formatCompactThreshold(effectiveDriftThresholdHours)} no ${
