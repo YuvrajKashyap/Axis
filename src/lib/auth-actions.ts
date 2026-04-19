@@ -198,7 +198,7 @@ async function sendPasswordRecoveryEmail(email: string, redirectTo: string) {
   await sendAxisAuthEmail({
     email,
     name: "",
-    actionLink: data.properties.action_link,
+    actionLink: resolveGeneratedActionLink(data.properties, "/reset-password"),
     subject: "Reset your Axis password",
     intro: "Use this secure link to set a new password for Axis.",
     cta: "Reset password",
