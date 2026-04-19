@@ -462,6 +462,8 @@ export async function resetPassword(password: string): Promise<AuthResult> {
     };
   }
 
+  await supabase.auth.signOut();
+
   return {
     success: true,
     message: "Password updated.",
