@@ -11,16 +11,21 @@ type AuthResult = {
   pendingVerification?: boolean;
 };
 
-function getAuthConfirmRedirectUrl() {
-  const baseUrl =
-    process.env.NODE_ENV === "production"
-      ? "https://axis.yuvrajkashyap.com"
-      : "http://localhost:3000";
-
-  return `${baseUrl}/auth/confirm?next=/`;
+function getAuthBaseUrl() {
+  return process.env.NODE_ENV === "production"
+    ? "https://axis.yuvrajkashyap.com"
+    : "http://localhost:3000";
 }
 
-function hasCustomSignupEmailConfig() {
+function getAuthConfirmRedirectUrl() {
+  return `${getAuthBaseUrl()}/auth/confirm?next=/`;
+}
+
+function getPasswordRecoveryRedirectUrl() {
+  return `${getAuthBaseUrl()}/auth/confirm?next=/reset-password`;
+}
+
+function hasCustomAuthEmailConfig() {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
       process.env.SUPABASE_SERVICE_ROLE_KEY &&
@@ -139,6 +144,30 @@ async function sendExistingUserLink(name: string, email: string, redirectTo: str
   });
 }
 
+async function sendPasswordRecoveryEmail(email: string, redirectTo: string) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: {
+      redirectTo,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  await sendAxisAuthEmail({
+    email,
+    name: "",
+    actionLink: data.properties.action_link,
+    subject: "Reset your Axis password",
+    intro: "Use this secure link to set a new password for Axis.",
+    cta: "Reset password",
+  });
+}
+
 export async function signup(
   name: string,
   email: string,
@@ -153,7 +182,7 @@ export async function signup(
 
   const emailRedirectTo = getAuthConfirmRedirectUrl();
 
-  if (hasCustomSignupEmailConfig()) {
+  if (hasCustomAuthEmailConfig()) {
     try {
       await sendCustomSignupEmail(
         trimmedName,
@@ -300,6 +329,106 @@ export async function login(
   }
 
   return { success: true };
+}
+
+export async function requestPasswordReset(
+  email: string,
+): Promise<AuthResult> {
+  const trimmedEmail = email.trim().toLowerCase();
+
+  if (!trimmedEmail) {
+    return { success: false, error: "Enter your email first." };
+  }
+
+  const emailRedirectTo = getPasswordRecoveryRedirectUrl();
+  const genericSuccessMessage =
+    "If an account exists for that email, check your inbox for a reset link.";
+
+  if (hasCustomAuthEmailConfig()) {
+    try {
+      await sendPasswordRecoveryEmail(trimmedEmail, emailRedirectTo);
+      return {
+        success: true,
+        message: genericSuccessMessage,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message.toLowerCase() : "";
+
+      if (
+        message.includes("not found") ||
+        message.includes("no user") ||
+        message.includes("user not found")
+      ) {
+        return {
+          success: true,
+          message: genericSuccessMessage,
+        };
+      }
+
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to send password reset email.",
+      };
+    }
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+    redirectTo: emailRedirectTo,
+  });
+
+  if (error) {
+    return {
+      success: false,
+      error: error.message || "Failed to send password reset email.",
+    };
+  }
+
+  return {
+    success: true,
+    message: genericSuccessMessage,
+  };
+}
+
+export async function resetPassword(password: string): Promise<AuthResult> {
+  if (password.length < 6) {
+    return {
+      success: false,
+      error: "Password must be at least 6 characters.",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      success: false,
+      error: "This reset link is invalid or expired. Request a new one.",
+    };
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password,
+  });
+
+  if (error) {
+    return {
+      success: false,
+      error: error.message || "Failed to update password.",
+    };
+  }
+
+  return {
+    success: true,
+    message: "Password updated.",
+  };
 }
 
 export async function logout() {

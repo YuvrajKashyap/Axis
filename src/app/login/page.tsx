@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { signup, login } from "@/lib/auth-actions";
+import { signup, login, requestPasswordReset } from "@/lib/auth-actions";
 
 function EyeIcon({ visible }: { visible: boolean }) {
   return (
@@ -41,6 +41,7 @@ export default function LoginPage() {
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [loginMessage, setLoginMessage] = useState("");
 
   function handleSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -73,11 +74,33 @@ export default function LoginPage() {
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoginError("");
+    setLoginMessage("");
     startTransition(async () => {
       try {
         const result = await login(loginEmail, loginPassword);
         if (result.success) {
           window.location.assign("/");
+        } else {
+          setLoginError(result.error || "Something went wrong.");
+        }
+      } catch {
+        setLoginError("Something went wrong.");
+      }
+    });
+  }
+
+  function handlePasswordReset() {
+    setLoginError("");
+    setLoginMessage("");
+
+    startTransition(async () => {
+      try {
+        const result = await requestPasswordReset(loginEmail);
+        if (result.success) {
+          setLoginMessage(
+            result.message ||
+              "If an account exists for that email, check your inbox for a reset link.",
+          );
         } else {
           setLoginError(result.error || "Something went wrong.");
         }
@@ -283,9 +306,24 @@ export default function LoginPage() {
                     </button>
                   </div>
                 </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handlePasswordReset}
+                    disabled={isPending}
+                    className="text-[10px] font-mono tracking-[0.18em] uppercase text-zinc-500 transition-colors hover:text-zinc-300 disabled:opacity-40"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
                 {loginError && (
                   <p className="text-xs font-mono text-red-400/80">
                     {loginError}
+                  </p>
+                )}
+                {loginMessage && (
+                  <p className="text-xs font-mono text-zinc-400">
+                    {loginMessage}
                   </p>
                 )}
                 <button
