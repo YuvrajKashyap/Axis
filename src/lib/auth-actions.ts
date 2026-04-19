@@ -11,6 +11,12 @@ type AuthResult = {
   pendingVerification?: boolean;
 };
 
+type GeneratedLinkProperties = {
+  action_link: string;
+  hashed_token?: string;
+  verification_type?: string;
+};
+
 function getAuthBaseUrl() {
   return process.env.NODE_ENV === "production"
     ? "https://axis.yuvrajkashyap.com"
