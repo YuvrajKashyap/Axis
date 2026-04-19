@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
-import { resetPassword } from "@/lib/auth-actions";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+
+const PENDING_PASSWORD_KEY = "axis-password-reset-pending";
 
 function EyeIcon({ visible }: { visible: boolean }) {
   return (
@@ -24,13 +26,14 @@ function EyeIcon({ visible }: { visible: boolean }) {
 }
 
 export default function ResetPasswordPage() {
-  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
   const [password, setPassword] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    sessionStorage.removeItem(PENDING_PASSWORD_KEY);
+  }, []);
 
   const inputClass =
     "w-full bg-zinc-900/50 border border-zinc-800 focus:border-zinc-600 outline-none px-4 py-3 text-sm text-zinc-200 rounded-lg transition-colors font-mono placeholder:text-zinc-700";
@@ -40,29 +43,17 @@ export default function ResetPasswordPage() {
   const eyeButtonClass =
     "absolute inset-y-0 right-0 flex items-center px-4 text-zinc-500 transition-colors hover:text-zinc-300";
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleContinue(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setMessage("");
 
-    if (password !== passwordConfirm) {
-      setError("Passwords do not match.");
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
       return;
     }
 
-    startTransition(async () => {
-      try {
-        const result = await resetPassword(password);
-        if (result.success) {
-          setMessage("Password updated. Redirecting...");
-          window.location.assign("/");
-        } else {
-          setError(result.error || "Something went wrong.");
-        }
-      } catch {
-        setError("Something went wrong.");
-      }
-    });
+    sessionStorage.setItem(PENDING_PASSWORD_KEY, password);
+    router.push("/reset-password/confirm");
   }
 
   return (
@@ -84,10 +75,10 @@ export default function ResetPasswordPage() {
             Reset your password
           </h2>
           <p className="mb-8 text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-500">
-            Set a new password for your axis account
+            Step 1 of 2 - choose a new password
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleContinue} className="space-y-4">
             <div>
               <label className={labelClass}>New Password</label>
               <div className="relative">
@@ -99,6 +90,7 @@ export default function ResetPasswordPage() {
                   placeholder="6+ characters"
                   required
                   minLength={6}
+                  autoFocus
                 />
                 <button
                   type="button"
@@ -112,49 +104,15 @@ export default function ResetPasswordPage() {
               </div>
             </div>
 
-            <div>
-              <label className={labelClass}>Retype Password</label>
-              <div className="relative">
-                <input
-                  type={showPasswordConfirm ? "text" : "password"}
-                  value={passwordConfirm}
-                  onChange={(e) => setPasswordConfirm(e.target.value)}
-                  className={passwordInputClass}
-                  placeholder="Retype password"
-                  required
-                  minLength={6}
-                />
-                <button
-                  type="button"
-                  aria-label={
-                    showPasswordConfirm
-                      ? "Hide password confirmation"
-                      : "Show password confirmation"
-                  }
-                  aria-pressed={showPasswordConfirm}
-                  onClick={() =>
-                    setShowPasswordConfirm((visible) => !visible)
-                  }
-                  className={eyeButtonClass}
-                >
-                  <EyeIcon visible={showPasswordConfirm} />
-                </button>
-              </div>
-            </div>
-
             {error && (
               <p className="text-xs font-mono text-red-400/80">{error}</p>
-            )}
-            {message && (
-              <p className="text-xs font-mono text-zinc-400">{message}</p>
             )}
 
             <button
               type="submit"
-              disabled={isPending}
-              className="mt-2 w-full rounded-lg bg-white py-3 text-[11px] font-mono tracking-[0.3em] uppercase text-black transition-colors hover:bg-zinc-200 disabled:opacity-40"
+              className="mt-2 w-full rounded-lg bg-white py-3 text-[11px] font-mono tracking-[0.3em] uppercase text-black transition-colors hover:bg-zinc-200"
             >
-              {isPending ? "Updating..." : "Update Password"}
+              Continue
             </button>
 
             <div className="pt-2 text-center">
