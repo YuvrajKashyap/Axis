@@ -31,6 +31,22 @@ function getPasswordRecoveryRedirectUrl() {
   return `${getAuthBaseUrl()}/auth/confirm?next=/reset-password`;
 }
 
+function buildInternalAuthConfirmUrl({
+  tokenHash,
+  type,
+  next,
+}: {
+  tokenHash: string;
+  type: string;
+  next: string;
+}) {
+  const url = new URL("/auth/confirm", getAuthBaseUrl());
+  url.searchParams.set("token_hash", tokenHash);
+  url.searchParams.set("type", type);
+  url.searchParams.set("next", next);
+  return url.toString();
+}
+
 function hasCustomAuthEmailConfig() {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -91,6 +107,21 @@ async function sendAxisAuthEmail({
   if (error) {
     throw new Error(error.message);
   }
+}
+
+function resolveGeneratedActionLink(
+  properties: GeneratedLinkProperties,
+  next: string,
+) {
+  if (properties.hashed_token && properties.verification_type) {
+    return buildInternalAuthConfirmUrl({
+      tokenHash: properties.hashed_token,
+      type: properties.verification_type,
+      next,
+    });
+  }
+
+  return properties.action_link;
 }
 
 async function sendCustomSignupEmail(
