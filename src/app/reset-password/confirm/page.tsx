@@ -26,12 +26,31 @@ function EyeIcon({ visible }: { visible: boolean }) {
   );
 }
 
+function SuccessCheck() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-10 w-10 text-emerald-400"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8.5 12.5 2.4 2.4 4.6-5.4" />
+    </svg>
+  );
+}
+
 export default function ResetPasswordConfirmPage() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     const password = sessionStorage.getItem(PENDING_PASSWORD_KEY);
@@ -69,7 +88,7 @@ export default function ResetPasswordConfirmPage() {
         const result = await resetPassword(pendingPassword);
         if (result.success) {
           sessionStorage.removeItem(PENDING_PASSWORD_KEY);
-          window.location.assign("/login");
+          setSuccess(true);
         } else {
           setError(result.error || "Something went wrong.");
         }
@@ -94,66 +113,88 @@ export default function ResetPasswordConfirmPage() {
 
       <div className="relative z-10 w-full max-w-md px-6">
         <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/80 p-8 backdrop-blur-sm md:p-10">
-          <h2 className="mb-1 font-[family-name:var(--font-playfair)] text-2xl italic text-zinc-100">
-            Confirm your password
-          </h2>
-          <p className="mb-8 text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-500">
-            Step 2 of 2 - retype it to confirm
-          </p>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className={labelClass}>Retype Password</label>
-              <div className="relative">
-                <input
-                  type={showPasswordConfirm ? "text" : "password"}
-                  value={passwordConfirm}
-                  onChange={(e) => setPasswordConfirm(e.target.value)}
-                  className={passwordInputClass}
-                  placeholder="Retype password"
-                  required
-                  minLength={6}
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  aria-label={
-                    showPasswordConfirm
-                      ? "Hide password confirmation"
-                      : "Show password confirmation"
-                  }
-                  aria-pressed={showPasswordConfirm}
-                  onClick={() =>
-                    setShowPasswordConfirm((visible) => !visible)
-                  }
-                  className={eyeButtonClass}
-                >
-                  <EyeIcon visible={showPasswordConfirm} />
-                </button>
+          {success ? (
+            <div className="flex flex-col items-center text-center">
+              <div className="mb-4">
+                <SuccessCheck />
               </div>
-            </div>
-
-            {error && (
-              <p className="text-xs font-mono text-red-400/80">{error}</p>
-            )}
-
-            <button
-              type="submit"
-              disabled={isPending}
-              className="mt-2 w-full rounded-lg bg-white py-3 text-[11px] font-mono tracking-[0.3em] uppercase text-black transition-colors hover:bg-zinc-200 disabled:opacity-40"
-            >
-              {isPending ? "Resetting..." : "Confirm Reset"}
-            </button>
-
-            <div className="pt-2 text-center">
+              <h2 className="mb-2 font-[family-name:var(--font-playfair)] text-2xl italic text-zinc-100">
+                Password reset
+              </h2>
+              <p className="mb-8 text-sm text-zinc-400">
+                Your password has been reset. Try to log in again.
+              </p>
               <Link
-                href="/reset-password"
-                className="text-[10px] font-mono tracking-[0.18em] uppercase text-zinc-500 transition-colors hover:text-zinc-300"
+                href="/login"
+                className="w-full rounded-lg bg-white py-3 text-center text-[11px] font-mono tracking-[0.3em] uppercase text-black transition-colors hover:bg-zinc-200"
               >
-                Back
+                Back to Sign In
               </Link>
             </div>
-          </form>
+          ) : (
+            <>
+              <h2 className="mb-1 font-[family-name:var(--font-playfair)] text-2xl italic text-zinc-100">
+                Confirm your password
+              </h2>
+              <p className="mb-8 text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-500">
+                Step 2 of 2 - retype it to confirm
+              </p>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className={labelClass}>Retype Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPasswordConfirm ? "text" : "password"}
+                      value={passwordConfirm}
+                      onChange={(e) => setPasswordConfirm(e.target.value)}
+                      className={passwordInputClass}
+                      placeholder="Retype password"
+                      required
+                      minLength={6}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      aria-label={
+                        showPasswordConfirm
+                          ? "Hide password confirmation"
+                          : "Show password confirmation"
+                      }
+                      aria-pressed={showPasswordConfirm}
+                      onClick={() =>
+                        setShowPasswordConfirm((visible) => !visible)
+                      }
+                      className={eyeButtonClass}
+                    >
+                      <EyeIcon visible={showPasswordConfirm} />
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <p className="text-xs font-mono text-red-400/80">{error}</p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="mt-2 w-full rounded-lg bg-white py-3 text-[11px] font-mono tracking-[0.3em] uppercase text-black transition-colors hover:bg-zinc-200 disabled:opacity-40"
+                >
+                  {isPending ? "Resetting..." : "Confirm Reset"}
+                </button>
+
+                <div className="pt-2 text-center">
+                  <Link
+                    href="/reset-password"
+                    className="text-[10px] font-mono tracking-[0.18em] uppercase text-zinc-500 transition-colors hover:text-zinc-300"
+                  >
+                    Back
+                  </Link>
+                </div>
+              </form>
+            </>
+          )}
         </div>
       </div>
     </div>
