@@ -150,7 +150,7 @@ async function sendCustomSignupEmail(
   await sendAxisAuthEmail({
     email,
     name,
-    actionLink: data.properties.action_link,
+    actionLink: resolveGeneratedActionLink(data.properties, "/"),
     subject: "Confirm your Axis account",
     intro: "Confirm your email to enter your orrery.",
     cta: "Confirm email",
@@ -174,7 +174,7 @@ async function sendExistingUserLink(name: string, email: string, redirectTo: str
   await sendAxisAuthEmail({
     email,
     name,
-    actionLink: data.properties.action_link,
+    actionLink: resolveGeneratedActionLink(data.properties, "/"),
     subject: "Continue to Axis",
     intro: "Use this secure link to continue into Axis.",
     cta: "Open Axis",
