@@ -1460,7 +1460,11 @@ export function Orrery({
               >
                 AXIS
               </span>
-              {isDemo && <span>(This is a public demo)</span>}
+              {isDemo && (
+                <span className="absolute whitespace-nowrap text-[8px] font-mono tracking-[0.24em] uppercase text-zinc-600">
+                  (This is a public demo)
+                </span>
+              )}
             </button>
 
             {/* Tether line during drag */}
