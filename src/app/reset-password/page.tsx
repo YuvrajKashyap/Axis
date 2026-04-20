@@ -117,7 +117,7 @@ export default function ResetPasswordPage() {
 
             <div className="pt-2 text-center">
               <Link
-                href="/login"
+                href="/login?mode=login"
                 className="text-[10px] font-mono tracking-[0.18em] uppercase text-zinc-500 transition-colors hover:text-zinc-300"
               >
                 Back to sign in
