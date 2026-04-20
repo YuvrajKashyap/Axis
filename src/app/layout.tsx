@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import { EscapeToOrrery } from "./EscapeToOrrery";
 import "./globals.css";
@@ -38,6 +39,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <EscapeToOrrery />
         {children}
+        <Analytics />
       </body>
     </html>
   );
