@@ -125,7 +125,7 @@ export default function ResetPasswordConfirmPage() {
                 Your password has been reset. Try to log in again.
               </p>
               <Link
-                href="/login"
+                href="/login?mode=login"
                 className="w-full rounded-lg bg-white py-3 text-center text-[11px] font-mono tracking-[0.3em] uppercase text-black transition-colors hover:bg-zinc-200"
               >
                 Back to Sign In
