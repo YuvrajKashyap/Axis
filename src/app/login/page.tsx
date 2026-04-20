@@ -25,7 +25,14 @@ function EyeIcon({ visible }: { visible: boolean }) {
 
 export default function LoginPage() {
   const [isPending, startTransition] = useTransition();
-  const [mode, setMode] = useState<"signup" | "login">("signup");
+  const [mode, setMode] = useState<"signup" | "login">(() => {
+    if (typeof window === "undefined") {
+      return "signup";
+    }
+
+    const searchParams = new URLSearchParams(window.location.search);
+    return searchParams.get("mode") === "login" ? "login" : "signup";
+  });
 
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
