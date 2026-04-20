@@ -1460,7 +1460,7 @@ export function Orrery({
               >
                 AXIS
               </span>
-              {isDemo && <span>This is a public demo</span>}
+              {isDemo && <span>(This is a public demo)</span>}
             </button>
 
             {/* Tether line during drag */}
