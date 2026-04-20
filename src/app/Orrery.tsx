@@ -1461,7 +1461,10 @@ export function Orrery({
                 AXIS
               </span>
               {isDemo && (
-                <span className="absolute whitespace-nowrap text-[8px] font-mono tracking-[0.24em] uppercase text-zinc-600">
+                <span
+                  className="absolute whitespace-nowrap text-[8px] font-mono tracking-[0.24em] uppercase text-zinc-600"
+                  style={{ top: 42, left: "50%", transform: "translateX(-50%)" }}
+                >
                   (This is a public demo)
                 </span>
               )}
