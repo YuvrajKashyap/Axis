@@ -17,20 +17,25 @@ type CommitmentRecord = {
 
 async function scheduleDomainDriftWarningSafely(domainId: string) {
   try {
-    const result = await scheduleDomainDriftWarning(domainId);
+    const result = await scheduleDomainDriftWarning(domainId, {
+      source: "status-update",
+    });
     if (result.reason === "processed-now") {
       console.info("Drift warning processed immediately after domain mutation", {
         domainId,
+        source: "status-update",
       });
     } else if (!result.scheduled) {
       console.warn("Drift warning was not scheduled after domain mutation", {
         domainId,
+        source: "status-update",
         reason: result.reason,
       });
     }
   } catch (error) {
     console.error("Failed to schedule drift warning after domain mutation", {
       domainId,
+      source: "status-update",
       error,
     });
   }
@@ -146,6 +151,14 @@ export async function createCommitment(
     const commitmentCreatedAt = insertedCommitment?.created_at
       ? new Date(insertedCommitment.created_at)
       : new Date();
+
+    console.info("Drift warning refresh detected", {
+      domainId: domain.id,
+      userId,
+      source: "commitment",
+      commitmentCreatedAt: commitmentCreatedAt.toISOString(),
+    });
+
     const { error: alignError } = await supabase
       .schema("axis")
       .from("domains")
@@ -163,6 +176,7 @@ export async function createCommitment(
 
     try {
       const result = await scheduleDomainDriftWarning(domain.id, {
+        source: "commitment",
         status: "ALIGNED",
         lastCommitmentAt: commitmentCreatedAt,
         lastCommitmentText: trimmedText,
@@ -170,16 +184,19 @@ export async function createCommitment(
       if (result.reason === "processed-now") {
         console.info("Drift warning processed immediately after domain mutation", {
           domainId: domain.id,
+          source: "commitment",
         });
       } else if (!result.scheduled) {
         console.warn("Drift warning was not scheduled after domain mutation", {
           domainId: domain.id,
+          source: "commitment",
           reason: result.reason,
         });
       }
     } catch (error) {
       console.error("Failed to schedule drift warning after domain mutation", {
         domainId: domain.id,
+        source: "commitment",
         error,
       });
     }
@@ -221,6 +238,13 @@ export async function recordPassiveAlignmentTouch(
   }
 
   const alignedAt = new Date().toISOString();
+  console.info("Drift warning refresh detected", {
+    domainId: domain.id,
+    userId,
+    source: "passive-alignment",
+    passiveAlignmentAt: alignedAt,
+  });
+
   const { error: updateError } = await supabase
     .schema("axis")
     .from("domains")
@@ -237,22 +261,26 @@ export async function recordPassiveAlignmentTouch(
 
   try {
     const result = await scheduleDomainDriftWarning(domain.id, {
+      source: "passive-alignment",
       status: "ALIGNED",
       lastPassiveAlignmentAt: new Date(alignedAt),
     });
     if (result.reason === "processed-now") {
       console.info("Drift warning processed immediately after domain mutation", {
         domainId: domain.id,
+        source: "passive-alignment",
       });
     } else if (!result.scheduled) {
       console.warn("Drift warning was not scheduled after domain mutation", {
         domainId: domain.id,
+        source: "passive-alignment",
         reason: result.reason,
       });
     }
   } catch (error) {
     console.error("Failed to schedule drift warning after domain mutation", {
       domainId: domain.id,
+      source: "passive-alignment",
       error,
     });
   }

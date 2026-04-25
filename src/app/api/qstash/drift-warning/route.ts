@@ -1,9 +1,22 @@
 import { processDomainDriftWarning, verifyQStashRequest } from "@/lib/drift-warning";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function POST(request: Request) {
   const rawBody = await request.text();
+  console.info("Drift warning callback received", {
+    url: request.url,
+    contentLength: rawBody.length,
+  });
+
   const verified = await verifyQStashRequest(request, rawBody);
+
+  console.info("Drift warning callback signature verification completed", {
+    url: request.url,
+    verified,
+  });
 
   if (!verified) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });

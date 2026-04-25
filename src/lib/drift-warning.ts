@@ -34,6 +34,12 @@ type DriftWarningPayload = {
 };
 
 type WarningScheduleOverrides = {
+  source?:
+    | "commitment"
+    | "passive-alignment"
+    | "settings-save"
+    | "status-update"
+    | "unknown";
   status?: "ALIGNED" | "NEUTRAL" | "DRIFTING" | "ARCHIVED";
   lastCommitmentAt?: Date | null;
   lastCommitmentText?: string | null;
@@ -83,6 +89,24 @@ type CommitmentRow = {
 
 function toDate(value: string | null): Date | null {
   return value ? new Date(value) : null;
+}
+
+function toIso(value: Date | null | undefined) {
+  return value ? value.toISOString() : null;
+}
+
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    message: String(error),
+  };
 }
 
 async function createWarningDataClient() {
@@ -290,6 +314,13 @@ async function sendDriftWarningEmail(
   domain: DomainWarningContext,
   warningLeadHours: number,
 ) {
+  console.info("Drift warning email send started", {
+    domainId: domain.id,
+    userId: domain.userId,
+    recipientEmail: domain.recipientEmail,
+    warningLeadHours,
+  });
+
   if (!resendClient) return { sent: false, reason: "resend-not-configured" as const };
   if (!process.env.RESEND_FROM_EMAIL) {
     return { sent: false, reason: "resend-from-missing" as const };
@@ -329,8 +360,21 @@ async function sendDriftWarningEmail(
   });
 
   if (error) {
+    console.error("Drift warning email send failed", {
+      domainId: domain.id,
+      userId: domain.userId,
+      recipientEmail: domain.recipientEmail,
+      error: serializeError(error),
+    });
     throw new Error(error.message);
   }
+
+  console.info("Drift warning email send succeeded", {
+    domainId: domain.id,
+    userId: domain.userId,
+    recipientEmail: domain.recipientEmail,
+    warningLeadHours,
+  });
 
   return { sent: true as const };
 }
@@ -344,20 +388,13 @@ function escapeHtml(input: string) {
     .replace(/'/g, "&#39;");
 }
 
-export async function processDomainDriftWarning(
+async function processResolvedDomainDriftWarning(
+  domain: DomainWarningContext,
   payload: DriftWarningPayload,
+  warning: ReturnType<typeof buildWarningPayload>,
   options: { bypassTimingTolerance?: boolean } = {},
 ) {
-  const domain = await getDomainWarningContext(
-    payload.domainId,
-    payload.recipientEmail ?? null,
-  );
-  if (!domain) {
-    return { sent: false, reason: "domain-not-found" as const };
-  }
-
   const nowMs = Date.now();
-  const warning = buildWarningPayload(domain, nowMs);
   const currentActivityAt = warning.driftState.lastRelevantActivityAt;
 
   if (
@@ -366,20 +403,41 @@ export async function processDomainDriftWarning(
     warning.warningLeadHours === null ||
     !currentActivityAt
   ) {
+    console.info("Drift warning callback skipped", {
+      domainId: payload.domainId,
+      reason: "not-eligible",
+    });
     return { sent: false, reason: "not-eligible" as const };
   }
 
   if (currentActivityAt.toISOString() !== payload.expectedActivityAt) {
+    console.info("Drift warning callback skipped", {
+      domainId: payload.domainId,
+      reason: "stale-activity",
+      currentActivityAt: currentActivityAt.toISOString(),
+      expectedActivityAt: payload.expectedActivityAt,
+    });
     return { sent: false, reason: "stale-activity" as const };
   }
 
   if (warning.warningAt.toISOString() !== payload.expectedWarningAt) {
+    console.info("Drift warning callback skipped", {
+      domainId: payload.domainId,
+      reason: "stale-warning-window",
+      currentWarningAt: warning.warningAt.toISOString(),
+      expectedWarningAt: payload.expectedWarningAt,
+    });
     return { sent: false, reason: "stale-warning-window" as const };
   }
 
   if (
     domain.lastDriftWarningActivityAt?.toISOString() === currentActivityAt.toISOString()
   ) {
+    console.info("Drift warning callback skipped", {
+      domainId: payload.domainId,
+      reason: "already-sent",
+      currentActivityAt: currentActivityAt.toISOString(),
+    });
     return { sent: false, reason: "already-sent" as const };
   }
 
@@ -387,10 +445,25 @@ export async function processDomainDriftWarning(
     !options.bypassTimingTolerance &&
     Math.abs(nowMs - warning.warningAt.getTime()) > DRIFT_WARNING_TOLERANCE_MS
   ) {
+    console.info("Drift warning callback skipped", {
+      domainId: payload.domainId,
+      reason: "outside-warning-window",
+      now: new Date(nowMs).toISOString(),
+      warningAt: warning.warningAt.toISOString(),
+    });
     return { sent: false, reason: "outside-warning-window" as const };
   }
 
-  if (!options.bypassTimingTolerance && warning.remainingMs !== null && warning.remainingMs <= 0) {
+  if (
+    !options.bypassTimingTolerance &&
+    warning.remainingMs !== null &&
+    warning.remainingMs <= 0
+  ) {
+    console.info("Drift warning callback skipped", {
+      domainId: payload.domainId,
+      reason: "already-drifted",
+      remainingMs: warning.remainingMs,
+    });
     return { sent: false, reason: "already-drifted" as const };
   }
 
@@ -419,24 +492,101 @@ export async function processDomainDriftWarning(
     );
   }
 
+  console.info("Drift warning callback completed with send", {
+    domainId: domain.id,
+    userId: domain.userId,
+    warningActivityAt: currentActivityAt.toISOString(),
+  });
+
   return { sent: true as const };
+}
+
+export async function processDomainDriftWarning(
+  payload: DriftWarningPayload,
+  options: { bypassTimingTolerance?: boolean } = {},
+) {
+  console.info("Drift warning callback validation started", {
+    domainId: payload.domainId,
+    expectedWarningAt: payload.expectedWarningAt,
+    expectedActivityAt: payload.expectedActivityAt,
+    bypassTimingTolerance: options.bypassTimingTolerance ?? false,
+  });
+
+  const domain = await getDomainWarningContext(
+    payload.domainId,
+    payload.recipientEmail ?? null,
+  );
+  if (!domain) {
+    return { sent: false, reason: "domain-not-found" as const };
+  }
+
+  const nowMs = Date.now();
+  const warning = buildWarningPayload(domain, nowMs);
+  const currentActivityAt = warning.driftState.lastRelevantActivityAt;
+
+  console.info("Drift warning callback state resolved", {
+    domainId: domain.id,
+    userId: domain.userId,
+    status: domain.status,
+    driftMode: domain.driftMode,
+    driftThresholdHours: warning.driftThresholdHours,
+    warningLeadHours: warning.warningLeadHours,
+    lastCommitmentAt: toIso(domain.commitments[0]?.createdAt ?? null),
+    lastPassiveAlignmentAt: toIso(domain.lastPassiveAlignmentAt),
+    lastRelevantActivityAt: toIso(currentActivityAt),
+    driftAt: toIso(warning.driftState.nextDriftAt),
+    warnAt: toIso(warning.warningAt),
+    warningEligible: warning.warningEligible,
+  });
+
+  return processResolvedDomainDriftWarning(domain, payload, warning, options);
 }
 
 export async function scheduleDomainDriftWarning(
   domainId: string,
   overrides?: WarningScheduleOverrides,
 ) {
+  console.info("Drift warning scheduling started", {
+    domainId,
+    source: overrides?.source ?? "unknown",
+    overrideStatus: overrides?.status ?? null,
+    overrideLastCommitmentAt: toIso(overrides?.lastCommitmentAt),
+    overrideLastPassiveAlignmentAt: toIso(overrides?.lastPassiveAlignmentAt),
+  });
+
   const domain = await getDomainWarningContext(
     domainId,
     overrides?.recipientEmail ?? null,
     overrides,
   );
   if (!domain) {
+    console.warn("Drift warning scheduling skipped", {
+      domainId,
+      source: overrides?.source ?? "unknown",
+      reason: "domain-not-found",
+    });
     return { scheduled: false, reason: "domain-not-found" as const };
   }
 
   const warning = buildWarningPayload(domain);
   const currentActivityAt = warning.driftState.lastRelevantActivityAt;
+
+  console.info("Drift warning settings resolved", {
+    domainId: domain.id,
+    source: overrides?.source ?? "unknown",
+    userId: domain.userId,
+    status: domain.status,
+    driftMode: domain.driftMode,
+    driftThresholdHours: warning.driftThresholdHours,
+    warningLeadHours: warning.warningLeadHours,
+    lastCommitmentAt: toIso(domain.commitments[0]?.createdAt ?? null),
+    lastPassiveAlignmentAt: toIso(domain.lastPassiveAlignmentAt),
+    driftAt: toIso(warning.driftState.nextDriftAt),
+    warnAt: toIso(warning.warningAt),
+    lastRelevantActivityAt: toIso(currentActivityAt),
+    warningEligible: warning.warningEligible,
+    driftDisabled: warning.driftDisabled,
+  });
 
   if (
     !warning.warningEligible ||
@@ -444,12 +594,31 @@ export async function scheduleDomainDriftWarning(
     warning.warningLeadHours === null ||
     !currentActivityAt
   ) {
+    console.warn("Drift warning scheduling skipped", {
+      domainId: domain.id,
+      source: overrides?.source ?? "unknown",
+      reason: "not-eligible",
+      driftMode: domain.driftMode,
+      driftThresholdHours: warning.driftThresholdHours,
+      warningLeadHours: warning.warningLeadHours,
+      status: domain.status,
+      lastRelevantActivityAt: toIso(currentActivityAt),
+      driftAt: toIso(warning.driftState.nextDriftAt),
+      warnAt: toIso(warning.warningAt),
+    });
     return { scheduled: false, reason: "not-eligible" as const };
   }
 
   if (
     domain.lastDriftWarningActivityAt?.toISOString() === currentActivityAt.toISOString()
   ) {
+    console.warn("Drift warning scheduling skipped", {
+      domainId: domain.id,
+      source: overrides?.source ?? "unknown",
+      reason: "already-warned",
+      lastDriftWarningActivityAt: domain.lastDriftWarningActivityAt.toISOString(),
+      currentActivityAt: currentActivityAt.toISOString(),
+    });
     return { scheduled: false, reason: "already-warned" as const };
   }
 
@@ -462,7 +631,15 @@ export async function scheduleDomainDriftWarning(
   };
 
   if (warning.warningAt.getTime() <= nowMs) {
-    const result = await processDomainDriftWarning(payload, {
+    console.info("Drift warning scheduling chose immediate processing", {
+      domainId: domain.id,
+      source: overrides?.source ?? "unknown",
+      now: new Date(nowMs).toISOString(),
+      driftAt: toIso(warning.driftState.nextDriftAt),
+      warnAt: warning.warningAt.toISOString(),
+      expectedActivityAt: currentActivityAt.toISOString(),
+    });
+    const result = await processResolvedDomainDriftWarning(domain, payload, warning, {
       bypassTimingTolerance: true,
     });
     return {
@@ -472,11 +649,21 @@ export async function scheduleDomainDriftWarning(
   }
 
   if (!qstashClient) {
+    console.warn("Drift warning scheduling skipped", {
+      domainId: domain.id,
+      source: overrides?.source ?? "unknown",
+      reason: "qstash-not-configured",
+    });
     return { scheduled: false, reason: "qstash-not-configured" as const };
   }
 
   const appBaseUrl = getAppBaseUrl();
   if (!appBaseUrl) {
+    console.warn("Drift warning scheduling skipped", {
+      domainId: domain.id,
+      source: overrides?.source ?? "unknown",
+      reason: "app-base-url-missing",
+    });
     return { scheduled: false, reason: "app-base-url-missing" as const };
   }
 
@@ -485,22 +672,50 @@ export async function scheduleDomainDriftWarning(
     Math.ceil((warning.warningAt.getTime() - nowMs) / 1000),
   );
 
-  await qstashClient.publishJSON({
-    url: `${appBaseUrl}/api/qstash/drift-warning`,
-    body: payload,
-    headers: {
-      "Content-Type": "application/json",
-    },
-    delay: delaySeconds,
-    retries: 3,
+  const callbackUrl = `${appBaseUrl}/api/qstash/drift-warning`;
+
+  console.info("Drift warning QStash publish started", {
+    domainId: domain.id,
+    source: overrides?.source ?? "unknown",
+    callbackUrl,
+    delaySeconds,
+    driftAt: toIso(warning.driftState.nextDriftAt),
+    warnAt: warning.warningAt.toISOString(),
+    expectedActivityAt: currentActivityAt.toISOString(),
   });
 
-  console.info("Drift warning scheduled", {
-    domainId: domain.id,
-    warningAt: warning.warningAt.toISOString(),
-    expectedActivityAt: currentActivityAt.toISOString(),
-    delaySeconds,
-  });
+  try {
+    const publishResult = await qstashClient.publishJSON({
+      url: callbackUrl,
+      body: payload,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      delay: delaySeconds,
+      retries: 3,
+    });
+
+    console.info("Drift warning QStash publish succeeded", {
+      domainId: domain.id,
+      source: overrides?.source ?? "unknown",
+      messageId: publishResult.messageId,
+      callbackUrl: publishResult.url,
+      deduplicated: publishResult.deduplicated ?? false,
+      delaySeconds,
+      driftAt: toIso(warning.driftState.nextDriftAt),
+      warnAt: warning.warningAt.toISOString(),
+      expectedActivityAt: currentActivityAt.toISOString(),
+    });
+  } catch (error) {
+    console.error("Drift warning QStash publish failed", {
+      domainId: domain.id,
+      source: overrides?.source ?? "unknown",
+      callbackUrl,
+      delaySeconds,
+      error: serializeError(error),
+    });
+    throw error;
+  }
 
   return { scheduled: true as const };
 }

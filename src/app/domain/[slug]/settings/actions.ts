@@ -100,20 +100,25 @@ export async function saveDomainSettings(
   }
 
   try {
-    const result = await scheduleDomainDriftWarning(domain.id);
+    const result = await scheduleDomainDriftWarning(domain.id, {
+      source: "settings-save",
+    });
     if (result.reason === "processed-now") {
       console.info("Drift warning processed immediately after settings save", {
         domainId: domain.id,
+        source: "settings-save",
       });
     } else if (!result.scheduled) {
       console.warn("Drift warning was not scheduled after settings save", {
         domainId: domain.id,
+        source: "settings-save",
         reason: result.reason,
       });
     }
   } catch (error) {
     console.error("Failed to schedule drift warning after settings save", {
       domainId: domain.id,
+      source: "settings-save",
       error,
     });
   }

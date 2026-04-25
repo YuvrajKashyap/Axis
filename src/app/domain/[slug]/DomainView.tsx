@@ -324,6 +324,13 @@ export function DomainView({
   const [editReason, setEditReason] = useState(domain.primaryReason ?? "");
   const [editCost, setEditCost] = useState(domain.primaryCost ?? "");
   const [isSaving, startSaveTransition] = useTransition();
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedRef = useRef({
+    name: domain.name,
+    vision: domain.vision ?? "",
+    primaryReason: domain.primaryReason ?? "",
+    primaryCost: domain.primaryCost ?? "",
+  });
 
   // Delete state
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -505,30 +512,133 @@ export function DomainView({
     }
   }, [demoUser, domain.id, historyLoaded, historyLoading, showHistory]);
 
-  const handleSaveEdits = useCallback(() => {
-    startSaveTransition(async () => {
-      const promises: Promise<void>[] = [];
-      if (editName.trim() && editName.trim() !== domain.name) {
-        promises.push(updateDomainName(domain.id, editName.trim(), demoUser));
+  const persistEdits = useCallback(
+    ({
+      includeName = false,
+      exitEditing = false,
+      redirectIfSlugChanges = false,
+    }: {
+      includeName?: boolean;
+      exitEditing?: boolean;
+      redirectIfSlugChanges?: boolean;
+    } = {}) => {
+      const trimmedName = editName.trim();
+      if (includeName && !trimmedName) {
+        setEditName(lastSavedRef.current.name);
       }
-      const fields: Record<string, string> = {};
-      if (editVision !== (domain.vision ?? "")) fields.vision = editVision;
-      if (editReason !== (domain.primaryReason ?? "")) fields.primaryReason = editReason;
-      if (editCost !== (domain.primaryCost ?? "")) fields.primaryCost = editCost;
-      if (Object.keys(fields).length > 0) {
-        promises.push(updateDomainFields(domain.id, fields, demoUser));
+
+      const nextName = trimmedName || lastSavedRef.current.name;
+      const nameChanged = includeName && nextName !== lastSavedRef.current.name;
+      const visionChanged = editVision !== lastSavedRef.current.vision;
+      const reasonChanged = editReason !== lastSavedRef.current.primaryReason;
+      const costChanged = editCost !== lastSavedRef.current.primaryCost;
+
+      if (!nameChanged && !visionChanged && !reasonChanged && !costChanged) {
+        if (exitEditing) {
+          setEditing(false);
+        }
+        return;
       }
-      await Promise.all(promises);
-      setEditing(false);
-      // If name changed, slug changed — need to redirect
-      if (editName.trim() && editName.trim() !== domain.name) {
-        const newSlug = editName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-        router.push(domainLink(newSlug, alignQuery));
-      } else {
-        router.refresh();
-      }
+
+      startSaveTransition(async () => {
+        const promises: Promise<void>[] = [];
+
+        if (nameChanged) {
+          promises.push(updateDomainName(domain.id, nextName, demoUser));
+        }
+
+        const fields: Record<string, string> = {};
+        if (visionChanged) fields.vision = editVision;
+        if (reasonChanged) fields.primaryReason = editReason;
+        if (costChanged) fields.primaryCost = editCost;
+        if (Object.keys(fields).length > 0) {
+          promises.push(updateDomainFields(domain.id, fields, demoUser));
+        }
+
+        await Promise.all(promises);
+
+        lastSavedRef.current = {
+          name: nameChanged ? nextName : lastSavedRef.current.name,
+          vision: visionChanged ? editVision : lastSavedRef.current.vision,
+          primaryReason: reasonChanged
+            ? editReason
+            : lastSavedRef.current.primaryReason,
+          primaryCost: costChanged ? editCost : lastSavedRef.current.primaryCost,
+        };
+
+        if (exitEditing) {
+          setEditing(false);
+        }
+
+        if (nameChanged && redirectIfSlugChanges) {
+          const newSlug = nextName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/(^-|-$)/g, "");
+          router.push(domainLink(newSlug, alignQuery));
+        }
+      });
+    },
+    [
+      alignQuery,
+      demoUser,
+      domain.id,
+      domainLink,
+      editCost,
+      editName,
+      editReason,
+      editVision,
+      router,
+      startSaveTransition,
+    ],
+  );
+
+  const flushFieldAutosave = useCallback(() => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    persistEdits();
+  }, [persistEdits]);
+
+  const handleDoneEditing = useCallback(() => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    persistEdits({
+      includeName: true,
+      exitEditing: true,
+      redirectIfSlugChanges: true,
     });
-  }, [alignQuery, demoUser, domain, domainLink, editCost, editName, editReason, editVision, router, startSaveTransition]);
+  }, [persistEdits]);
+
+  useEffect(() => {
+    if (!editing) return;
+
+    const fieldsChanged =
+      editVision !== lastSavedRef.current.vision ||
+      editReason !== lastSavedRef.current.primaryReason ||
+      editCost !== lastSavedRef.current.primaryCost;
+
+    if (!fieldsChanged) return;
+
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = setTimeout(() => {
+      persistEdits();
+      autosaveTimerRef.current = null;
+    }, 700);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [editCost, editReason, editVision, editing, persistEdits]);
 
   const handleDelete = useCallback(() => {
     startDeleteTransition(async () => {
@@ -691,11 +801,11 @@ export function DomainView({
               )}
               {editing ? (
                 <button
-                  onClick={handleSaveEdits}
+                  onClick={handleDoneEditing}
                   disabled={isSaving}
                   className="shrink-0 text-[9px] font-mono tracking-[0.2em] md:tracking-[0.3em] uppercase text-zinc-500 hover:text-white transition-colors disabled:opacity-50"
                 >
-                  {isSaving ? "Saving..." : "Save"}
+                  {isSaving ? "Saving..." : "Done"}
                 </button>
               ) : (
                 <button
@@ -745,6 +855,12 @@ export function DomainView({
                 type="text"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
+                onBlur={() =>
+                  persistEdits({
+                    includeName: true,
+                    redirectIfSlugChanges: true,
+                  })
+                }
                 className={`w-full text-3xl sm:text-5xl md:text-7xl font-semibold tracking-tight text-center bg-transparent outline-none border-b border-zinc-800 focus:border-zinc-600 transition-all duration-1000 text-white ${
                   mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
                 }`}
@@ -757,7 +873,7 @@ export function DomainView({
                 }`}
                 style={{ transitionDelay: "300ms" }}
               >
-                {domain.name}
+                {editName.trim() || domain.name}
               </h1>
             )}
             {!editing && domain.identity ? (
@@ -879,11 +995,12 @@ export function DomainView({
                 onChange={(e) => setEditVision(e.target.value)}
                 placeholder="What does success look like?"
                 rows={4}
+                onBlur={flushFieldAutosave}
                 className="w-full text-xl md:text-2xl font-light leading-10 text-zinc-200 bg-transparent outline-none border-b border-zinc-800 focus:border-zinc-600 transition-colors placeholder:text-zinc-800 resize-none text-center"
               />
             ) : (
                 <p className="whitespace-pre-wrap text-xl md:text-2xl font-light leading-10 text-zinc-200">
-                  {domain.vision || "No vision defined yet."}
+                  {editVision || "No vision defined yet."}
                 </p>
             )}
           </div>
@@ -903,13 +1020,14 @@ export function DomainView({
                 <textarea
                   value={editReason}
                   onChange={(e) => setEditReason(e.target.value)}
+                  onBlur={flushFieldAutosave}
                   placeholder="Why does this matter?"
                   rows={3}
                   className="w-full text-base leading-8 text-zinc-300 font-light bg-transparent outline-none border-b border-zinc-800 focus:border-zinc-600 transition-colors placeholder:text-zinc-800 resize-none text-center md:text-right"
                 />
               ) : (
                 <p className="whitespace-pre-wrap text-base leading-8 text-zinc-300 font-light">
-                  {domain.primaryReason || "No reason defined yet."}
+                  {editReason || "No reason defined yet."}
                 </p>
               )}
             </div>
@@ -934,13 +1052,14 @@ export function DomainView({
                 <textarea
                   value={editCost}
                   onChange={(e) => setEditCost(e.target.value)}
+                  onBlur={flushFieldAutosave}
                   placeholder="What happens if you don't act?"
                   rows={3}
                   className="w-full text-base leading-8 text-zinc-300 font-light bg-transparent outline-none border-b border-zinc-800 focus:border-zinc-600 transition-colors placeholder:text-zinc-800 resize-none text-center md:text-left"
                 />
               ) : (
                 <p className="whitespace-pre-wrap text-base leading-8 text-zinc-300 font-light">
-                  {domain.primaryCost || domain.currentReality || "No cost defined yet."}
+                  {editCost || domain.currentReality || "No cost defined yet."}
                 </p>
               )}
             </div>
