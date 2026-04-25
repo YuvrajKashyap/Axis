@@ -1735,7 +1735,11 @@ export function Orrery({
                 if (e.key === "Enter" && newDomainName.trim()) {
                   startCreateTransition(async () => {
                     const result = await createDomain(newDomainName, editingDemo ? demoUserId : undefined);
-                    if (result.success) {
+                    if (result.success && result.slug) {
+                      setShowCreate(false);
+                      router.push(`/domain/${result.slug}`);
+                    } else if (result.success) {
+                      // Fallback if slug is missing for some reason
                       setShowCreate(false);
                       router.refresh();
                     } else {
@@ -1763,7 +1767,11 @@ export function Orrery({
                   if (!newDomainName.trim()) return;
                   startCreateTransition(async () => {
                     const result = await createDomain(newDomainName, editingDemo ? demoUserId : undefined);
-                    if (result.success) {
+                    if (result.success && result.slug) {
+                      setShowCreate(false);
+                      router.push(`/domain/${result.slug}`);
+                    } else if (result.success) {
+                      // Fallback if slug is missing for some reason
                       setShowCreate(false);
                       router.refresh();
                     } else {

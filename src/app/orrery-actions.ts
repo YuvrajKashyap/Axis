@@ -64,7 +64,7 @@ export async function resetOrbits(
   revalidatePath("/");
 }
 
-export async function createDomain(name: string, overrideUserId?: string): Promise<{ success: boolean; error?: string }> {
+export async function createDomain(name: string, overrideUserId?: string): Promise<{ success: boolean; error?: string; slug?: string }> {
   const userId = await getAuthorizedTargetUserId(overrideUserId);
   if (!userId) return { success: false, error: "Not signed in." };
 
@@ -107,5 +107,5 @@ export async function createDomain(name: string, overrideUserId?: string): Promi
   }
 
   revalidatePath("/");
-  return { success: true };
+  return { success: true, slug };
 }
