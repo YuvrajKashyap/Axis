@@ -458,9 +458,11 @@ export function Orrery({
   const [createError, setCreateError] = useState("");
   const [isCreating, startCreateTransition] = useTransition();
   const [hoveredMetric, setHoveredMetric] = useState<HoverMetric | null>(null);
+  const [selectedMetric, setSelectedMetric] = useState<HoverMetric | null>(null);
   const [hoveredCountdownDomainId, setHoveredCountdownDomainId] = useState<string | null>(null);
   const [orbitClockOpen, setOrbitClockOpen] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [countdownsMounted, setCountdownsMounted] = useState(false);
   const [returnPulseActive, setReturnPulseActive] = useState(false);
   const [returnPulseTargetId, setReturnPulseTargetId] = useState<string | null>(null);
   const showCreateRef = useRef(showCreate);
@@ -520,7 +522,12 @@ export function Orrery({
   useEffect(() => { radiiRef.current = radii; }, [radii]);
 
   useEffect(() => {
+    setCountdownsMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (isDemo || editingDemo) return;
+    setNowMs(Date.now());
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [editingDemo, isDemo]);
@@ -881,7 +888,11 @@ export function Orrery({
         driftDisabled,
         remainingMs,
         tone: driftDisabled ? "#67e8f9" : driftCountdownTone(remainingMs),
-        formatted: driftDisabled ? "DEACTIVATED DRIFT" : formatDriftCountdown(remainingMs),
+        formatted: driftDisabled
+          ? "DEACTIVATED DRIFT"
+          : countdownsMounted
+            ? formatDriftCountdown(remainingMs)
+            : "--h --m --s",
       };
     })
     .sort((a, b) => {
@@ -916,10 +927,41 @@ export function Orrery({
     { key: "ARCHIVED", count: archivedCount, label: "planets archived" },
     { key: "TOTAL", count: totalCount, label: "planets total" },
   ];
+  const selectedStat = footerStats.find((stat) => stat.key === selectedMetric);
+  const selectedMetricDomains = selectedMetric
+    ? domains.filter((domain: DomainData) =>
+        matchesHoverMetric(selectedMetric, effectiveStatus(domain.status)),
+      ).sort((a: DomainData, b: DomainData) => {
+        if (selectedMetric !== "TOTAL") return 0;
+        const order: Record<EffectiveStatus, number> = {
+          ACTIVE: 0,
+          DRIFTING: 1,
+          ARCHIVED: 2,
+        };
+        return order[effectiveStatus(a.status)] - order[effectiveStatus(b.status)];
+      })
+    : [];
   const countSlotWidthCh = Math.max(
     2,
     ...footerStats.map((stat) => String(stat.count).length),
   ) + 1;
+
+  const closeMetricPopup = useCallback(() => {
+    setSelectedMetric(null);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedMetric) return;
+
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        closeMetricPopup();
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [closeMetricPopup, selectedMetric]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1499,6 +1541,7 @@ export function Orrery({
               const isHoverMatch =
                 !returnPulseActive &&
                 (matchesHoverMetric(hoveredMetric, es) ||
+                  matchesHoverMetric(selectedMetric, es) ||
                   hoveredCountdownDomainId === domain.id);
               const isHighlightMatch = isHoverMatch || isPulseFocus;
               const dot = planetSize(radii[i], es, settings.planetSizeScale);
@@ -1648,15 +1691,17 @@ export function Orrery({
           <div className="flex flex-col items-center justify-center gap-4 lg:relative lg:min-h-[72px] lg:gap-0">
             <div className="flex w-full flex-col items-start gap-1.5 text-left lg:absolute lg:bottom-0 lg:left-0 lg:w-auto">
               {footerStats.map((stat) => {
-                const isHovered = hoveredMetric === stat.key;
+                const isHovered =
+                  hoveredMetric === stat.key || selectedMetric === stat.key;
                 return (
-                  <p
+                  <button
                     key={stat.key}
+                    type="button"
                     onPointerEnter={() => setHoveredMetric(stat.key)}
                     onPointerLeave={() => setHoveredMetric(null)}
-                    className="flex items-baseline font-mono text-[9px] uppercase tracking-[0.35em] leading-none text-zinc-700 transition-all duration-300"
+                    onClick={() => setSelectedMetric(stat.key)}
+                    className="-ml-2 flex min-h-8 items-center font-mono text-[9px] uppercase tracking-[0.35em] leading-none text-zinc-700 transition-all duration-300 py-1.5 pl-2 pr-3 text-left lg:ml-0 lg:min-h-0 lg:p-0"
                     style={{
-                      cursor: "default",
                       color: isHovered ? "rgba(228,228,231,0.92)" : undefined,
                       textShadow: isHovered ? "0 0 18px rgba(255,255,255,0.10)" : "none",
                       transform: isHovered ? "translateX(2px)" : "translateX(0)",
@@ -1673,7 +1718,7 @@ export function Orrery({
                       {stat.count}
                     </span>
                     <span className="pl-[0.9em]">{stat.label}</span>
-                  </p>
+                  </button>
                 );
               })}
             </div>
@@ -1697,6 +1742,100 @@ export function Orrery({
           </div>
         </div>
       </div>
+
+      {/* Planet list popup */}
+      {selectedMetric && selectedStat && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="planet-list-title"
+          className="fixed inset-0 z-40 flex items-center justify-center px-5 py-8"
+          style={{
+            backgroundColor: "rgba(0,0,0,0.58)",
+            backdropFilter: "blur(7px)",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeMetricPopup();
+          }}
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-lg"
+            style={{
+              backgroundColor: "rgba(8,8,10,0.96)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              boxShadow:
+                "0 18px 70px rgba(0,0,0,0.72), 0 0 1px rgba(255,255,255,0.08)",
+            }}
+          >
+            <div className="flex items-start justify-between gap-5 border-b border-white/[0.04] px-6 py-5">
+              <div>
+                <p className="font-mono text-[9px] uppercase tracking-[0.35em] text-zinc-600">
+                  {selectedStat.count} {selectedStat.label}
+                </p>
+                <h2
+                  id="planet-list-title"
+                  className="mt-2 text-2xl font-light tracking-tight text-zinc-100"
+                  style={{
+                    fontFamily: "var(--font-playfair), Georgia, serif",
+                  }}
+                >
+                  Planets
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeMetricPopup}
+                className="font-mono text-[10px] uppercase tracking-[0.28em] text-zinc-600 transition-colors hover:text-zinc-300"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="max-h-[72vh] overflow-y-auto px-2 py-2 sm:max-h-[58vh]">
+              {selectedMetricDomains.length > 0 ? (
+                selectedMetricDomains.map((domain: DomainData) => {
+                  const es = effectiveStatus(domain.status);
+                  const cfg = getDomainCfg(domain);
+                  const href = isDemo ? "/login" : domainUrl(domain.slug);
+                  return (
+                    <Link
+                      key={domain.id}
+                      href={href}
+                      onClick={closeMetricPopup}
+                      className="group flex items-center justify-between gap-4 rounded-md px-4 py-3 transition-colors hover:bg-white/[0.035]"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span
+                          className="h-2 w-2 shrink-0 rounded-full"
+                          style={{
+                            backgroundColor: cfg.color,
+                            boxShadow: cfg.glowSoft,
+                            opacity: es === "ARCHIVED" ? 0.55 : 1,
+                          }}
+                        />
+                        <span className="truncate text-sm tracking-wide text-zinc-300 transition-colors group-hover:text-zinc-100">
+                          {domain.name}
+                        </span>
+                      </div>
+                      <span className="shrink-0 font-mono text-[8px] uppercase tracking-[0.24em] text-zinc-700 transition-colors group-hover:text-zinc-500">
+                        {es === "ACTIVE"
+                          ? "Orbit"
+                          : es === "DRIFTING"
+                            ? "Drift"
+                            : "Archive"}
+                      </span>
+                    </Link>
+                  );
+                })
+              ) : (
+                <p className="px-4 py-10 text-center font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-700">
+                  No planets in this group
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create domain modal */}
       {showCreate && (
