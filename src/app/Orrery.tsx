@@ -333,11 +333,12 @@ function matchesHoverMetric(metric: HoverMetric | null, status: EffectiveStatus)
 }
 
 function getDomainSortTimestamp(domain: DomainData): number {
-  const value =
-    domain.updatedAt ?? domain.lastRelevantActivityAt ?? domain.lastCommitmentAt;
-  if (!value) return 0;
-  const time = new Date(value).getTime();
-  return Number.isFinite(time) ? time : 0;
+  return Math.max(
+    0,
+    ...[domain.updatedAt, domain.lastRelevantActivityAt, domain.lastCommitmentAt]
+      .map((value) => (value ? new Date(value).getTime() : 0))
+      .filter(Number.isFinite),
+  );
 }
 
 function formatDriftCountdown(remainingMs: number | null): string {
@@ -951,7 +952,9 @@ export function Orrery({
             ? order[effectiveStatus(a.status)] - order[effectiveStatus(b.status)]
             : 0;
         if (statusSort !== 0) return statusSort;
-        return getDomainSortTimestamp(b) - getDomainSortTimestamp(a);
+        const recencySort = getDomainSortTimestamp(b) - getDomainSortTimestamp(a);
+        if (recencySort !== 0) return recencySort;
+        return a.name.localeCompare(b.name);
       })
     : [];
   const countSlotWidthCh = Math.max(
