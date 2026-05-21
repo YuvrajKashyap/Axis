@@ -26,6 +26,7 @@ function toOrreryData(domains: DomainList): DomainData[] {
     autoDrifted: domain.autoDrifted,
     lastCommitmentAt: domain.lastCommitmentAt?.toISOString() ?? null,
     lastRelevantActivityAt: domain.lastRelevantActivityAt?.toISOString() ?? null,
+    updatedAt: domain.updatedAt.toISOString(),
     settings: normalizeDomainSettings({
       driftMode: domain.driftMode,
       driftThresholdHours: domain.driftThresholdHours,

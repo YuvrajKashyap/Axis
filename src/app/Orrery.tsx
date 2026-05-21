@@ -37,6 +37,7 @@ export type DomainData = {
   autoDrifted: boolean;
   lastCommitmentAt?: string | null;
   lastRelevantActivityAt?: string | null;
+  updatedAt?: string | null;
   settings?: DomainSettingsSnapshot;
 };
 
@@ -329,6 +330,14 @@ function matchesHoverMetric(metric: HoverMetric | null, status: EffectiveStatus)
   if (!metric) return false;
   if (metric === "TOTAL") return true;
   return metric === status;
+}
+
+function getDomainSortTimestamp(domain: DomainData): number {
+  const value =
+    domain.updatedAt ?? domain.lastRelevantActivityAt ?? domain.lastCommitmentAt;
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
 }
 
 function formatDriftCountdown(remainingMs: number | null): string {
@@ -932,13 +941,17 @@ export function Orrery({
     ? domains.filter((domain: DomainData) =>
         matchesHoverMetric(selectedMetric, effectiveStatus(domain.status)),
       ).sort((a: DomainData, b: DomainData) => {
-        if (selectedMetric !== "TOTAL") return 0;
         const order: Record<EffectiveStatus, number> = {
           ACTIVE: 0,
           DRIFTING: 1,
           ARCHIVED: 2,
         };
-        return order[effectiveStatus(a.status)] - order[effectiveStatus(b.status)];
+        const statusSort =
+          selectedMetric === "TOTAL"
+            ? order[effectiveStatus(a.status)] - order[effectiveStatus(b.status)]
+            : 0;
+        if (statusSort !== 0) return statusSort;
+        return getDomainSortTimestamp(b) - getDomainSortTimestamp(a);
       })
     : [];
   const countSlotWidthCh = Math.max(
