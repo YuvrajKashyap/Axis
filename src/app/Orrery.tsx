@@ -918,7 +918,7 @@ export function Orrery({
   const orbitClockExpandedHeight = Math.min(456, 176 + Math.min(activeCountdowns.length, 6) * 48);
   const orbitClockHeight = orbitClockOpen ? orbitClockExpandedHeight : orbitClockClosedSize;
   const orbitClockWidth = orbitClockOpen ? 376 : orbitClockClosedSize;
-  const orbitClockMobileClosedSize = 32;
+  const orbitClockMobileClosedSize = 48;
   const orbitClockMobileHeight = orbitClockOpen
     ? Math.min(360, 156 + Math.min(activeCountdowns.length, 5) * 42)
     : orbitClockMobileClosedSize;
@@ -1240,13 +1240,28 @@ export function Orrery({
         )}
 
         {showDriftCountdownWidget && (
-          <div className="pointer-events-none fixed right-2 top-1/2 z-30 -translate-y-1/2 lg:hidden">
+          <div className="pointer-events-none fixed right-3 top-1/2 z-30 -translate-y-1/2 lg:hidden">
             <div
+              onClick={() => {
+                if (!orbitClockOpen) {
+                  toggleOrbitClock();
+                }
+              }}
               className={`orbit-clock-shell pointer-events-auto relative transform-gpu transition-[width,height,border-radius,box-shadow,border-color,background-color] duration-[820ms] ease-[cubic-bezier(0.19,1,0.22,1)] ${orbitClockOpen ? "orbit-clock-shell-open overflow-hidden" : "overflow-visible"}`}
               style={{
                 width: orbitClockMobileWidth,
                 height: orbitClockMobileHeight,
                 borderRadius: orbitClockOpen ? 28 : 999,
+                backgroundColor: orbitClockOpen
+                  ? undefined
+                  : "rgba(2,4,10,0.55)",
+                borderColor: orbitClockOpen
+                  ? undefined
+                  : "rgba(103,232,249,0.20)",
+                boxShadow: orbitClockOpen
+                  ? undefined
+                  : "0 0 24px rgba(34,211,238,0.26), 0 0 62px rgba(34,211,238,0.16)",
+                touchAction: "manipulation",
                 willChange: "width, height, border-radius, box-shadow",
               }}
             >
@@ -1254,12 +1269,15 @@ export function Orrery({
 
               <button
                 type="button"
-                onClick={toggleOrbitClock}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  toggleOrbitClock();
+                }}
                 aria-expanded={orbitClockOpen}
                 aria-label={orbitClockOpen ? "Collapse drift countdown" : "Expand drift countdown"}
-                className={`absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 bg-transparent p-0 transform-gpu transition-[opacity,transform] duration-[720ms] ease-[cubic-bezier(0.19,1,0.22,1)] ${orbitClockOpen ? "pointer-events-none opacity-0" : "pointer-events-auto opacity-100"}`}
+                className={`absolute left-1/2 top-1/2 h-28 w-28 -translate-x-1/2 -translate-y-1/2 touch-manipulation bg-transparent p-0 transform-gpu transition-[opacity,transform] duration-[720ms] ease-[cubic-bezier(0.19,1,0.22,1)] ${orbitClockOpen ? "pointer-events-none opacity-0" : "pointer-events-auto opacity-100"}`}
                 style={{
-                  transform: `translate(-50%, -50%) scale(${orbitClockOpen ? 0.36 : 0.32})`,
+                  transform: `translate(-50%, -50%) scale(${orbitClockOpen ? 0.36 : 0.42})`,
                   willChange: "transform, opacity",
                 }}
               >
@@ -1269,6 +1287,11 @@ export function Orrery({
                   <div className="orbit-clock-ring orbit-clock-ring-c" />
                 </div>
               </button>
+              {!orbitClockOpen && (
+                <span className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 font-mono text-[8px] uppercase tracking-[0.18em] text-cyan-100/80">
+                  drift
+                </span>
+              )}
 
               <div
                 className={`absolute inset-0 flex transform-gpu transition-[opacity,transform] duration-[760ms] ease-[cubic-bezier(0.19,1,0.22,1)] ${orbitClockOpen ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-1 opacity-0"}`}
