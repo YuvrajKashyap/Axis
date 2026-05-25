@@ -1326,6 +1326,7 @@ export function Orrery({
                       {activeCountdowns.map((item) => {
                         const cfg = getDomainCfg(item.domain);
                         const isRowHovered = hoveredCountdownDomainId === item.domain.id;
+                        const href = domainUrl(item.domain.slug);
                         return (
                           <div
                             key={`mobile-${item.domain.id}`}
@@ -1338,7 +1339,12 @@ export function Orrery({
                               boxShadow: isRowHovered ? `0 0 20px ${cfg.color}14` : "none",
                             }}
                           >
-                            <div className="flex min-w-0 items-center gap-2.5">
+                            <Link
+                              href={href}
+                              aria-label={`Open ${item.domain.name}`}
+                              onClick={(event) => event.stopPropagation()}
+                              className="flex min-w-0 items-center gap-2.5 touch-manipulation"
+                            >
                               <span
                                 className="h-2 w-2 shrink-0 rounded-full"
                                 style={{
@@ -1349,7 +1355,7 @@ export function Orrery({
                               <span className="truncate text-[9px] font-mono uppercase tracking-[0.18em] text-zinc-200">
                                 {item.domain.name}
                               </span>
-                            </div>
+                            </Link>
                             <span
                               className="shrink-0 tabular-nums text-[9px] font-mono uppercase tracking-[0.12em] transition-colors duration-300"
                               style={{ color: isRowHovered ? cfg.color : item.tone }}
