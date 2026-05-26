@@ -1328,41 +1328,39 @@ export function Orrery({
                         const isRowHovered = hoveredCountdownDomainId === item.domain.id;
                         const href = domainUrl(item.domain.slug);
                         return (
-                          <div
+                          <Link
                             key={`mobile-${item.domain.id}`}
+                            href={href}
+                            aria-label={`Open ${item.domain.name}`}
+                            onClick={(event) => event.stopPropagation()}
                             onPointerEnter={() => setHoveredCountdownDomainId(item.domain.id)}
                             onPointerLeave={() => setHoveredCountdownDomainId(null)}
-                            className="flex items-center justify-between gap-3 rounded-[18px] border border-white/[0.04] bg-black/20 px-3 py-2.5 transition-all duration-300"
+                            className="group/mobileclockrow flex min-h-[42px] touch-manipulation items-center justify-between gap-3 rounded-[18px] border border-white/[0.04] bg-black/20 px-3 py-2.5 outline-none transition-all duration-300 active:scale-[0.985] focus-visible:border-cyan-200/50 focus-visible:bg-white/[0.055] focus-visible:shadow-[0_0_24px_rgba(103,232,249,0.18)]"
                             style={{
                               borderColor: isRowHovered ? `${cfg.color}40` : undefined,
                               backgroundColor: isRowHovered ? "rgba(255,255,255,0.045)" : undefined,
-                              boxShadow: isRowHovered ? `0 0 20px ${cfg.color}14` : "none",
+                              boxShadow: isRowHovered ? `0 0 20px ${cfg.color}18` : "none",
                             }}
                           >
-                            <Link
-                              href={href}
-                              aria-label={`Open ${item.domain.name}`}
-                              onClick={(event) => event.stopPropagation()}
-                              className="flex min-w-0 items-center gap-2.5 touch-manipulation"
-                            >
+                            <div className="flex min-w-0 items-center gap-2.5">
                               <span
-                                className="h-2 w-2 shrink-0 rounded-full"
+                                className="h-2 w-2 shrink-0 rounded-full transition-transform duration-300 group-active/mobileclockrow:scale-125"
                                 style={{
                                   backgroundColor: cfg.color,
                                   boxShadow: `0 0 8px ${cfg.color}55`,
                                 }}
                               />
-                              <span className="truncate text-[9px] font-mono uppercase tracking-[0.18em] text-zinc-200">
+                              <span className="truncate text-[9px] font-mono uppercase tracking-[0.18em] text-zinc-200 transition-colors duration-300 group-active/mobileclockrow:text-white">
                                 {item.domain.name}
                               </span>
-                            </Link>
+                            </div>
                             <span
                               className="shrink-0 tabular-nums text-[9px] font-mono uppercase tracking-[0.12em] transition-colors duration-300"
                               style={{ color: isRowHovered ? cfg.color : item.tone }}
                             >
                               {item.formatted}
                             </span>
-                          </div>
+                          </Link>
                         );
                       })}
                     </div>
