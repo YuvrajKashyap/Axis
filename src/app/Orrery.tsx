@@ -1192,9 +1192,11 @@ export function Orrery({
                       {activeCountdowns.map((item) => {
                         const cfg = getDomainCfg(item.domain);
                         const isRowHovered = hoveredCountdownDomainId === item.domain.id;
+                        const href = domainUrl(item.domain.slug);
                         return (
                           <div
                             key={item.domain.id}
+                            onClick={() => router.push(href)}
                             onPointerEnter={() => setHoveredCountdownDomainId(item.domain.id)}
                             onPointerLeave={() => setHoveredCountdownDomainId(null)}
                             className="group/clockrow flex items-center justify-between gap-4 rounded-[22px] border border-white/[0.04] bg-black/20 px-4 py-3 transition-all duration-300"
