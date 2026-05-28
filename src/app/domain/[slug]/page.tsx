@@ -1,5 +1,8 @@
 import { isAdmin } from "@/lib/get-data";
-import { normalizeDomainSettings } from "@/lib/domain-settings";
+import {
+  getSubtaskCompletionKey,
+  normalizeDomainSettings,
+} from "@/lib/domain-settings";
 import { restoreLegacyIfNeededForCurrentUser } from "@/lib/restore-legacy";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { requireSupabaseUser } from "@/lib/supabase-auth";
@@ -11,17 +14,42 @@ type DomainPageProps = {
   searchParams: Promise<{ align?: string; idx?: string; demoUser?: string }>;
 };
 
+const DOMAIN_DETAIL_SELECT =
+  "id,name,slug,status,color,identity,vision,primary_reason,primary_cost,current_reality,drift_mode,drift_threshold_hours,warning_lead_hours,commitment_requirement,subtask_reset_mode,subtask_time_zone,orbit_speed,visual_intensity,planet_size_scale,orbit_eccentricity";
+const LEGACY_DOMAIN_DETAIL_SELECT =
+  "id,name,slug,status,color,identity,vision,primary_reason,primary_cost,current_reality,drift_mode,drift_threshold_hours,warning_lead_hours,commitment_requirement,orbit_speed,visual_intensity,planet_size_scale,orbit_eccentricity";
+
+function isMissingSubtaskSchemaError(error: { message?: string } | null) {
+  const message = error?.message ?? "";
+  return (
+    message.includes("subtask_reset_mode") ||
+    message.includes("subtask_time_zone") ||
+    message.includes("domain_subtasks") ||
+    message.includes("domain_subtask_completions")
+  );
+}
+
 async function getDomainDetail(userId: string, slug: string) {
   const supabase = await createSupabaseServerClient();
-  const { data: domain, error: domainError } = await supabase
+  let domainResult = await supabase
     .schema("axis")
     .from("domains")
-    .select(
-      "id,name,slug,status,color,identity,vision,primary_reason,primary_cost,current_reality,drift_mode,drift_threshold_hours,warning_lead_hours,commitment_requirement,orbit_speed,visual_intensity,planet_size_scale,orbit_eccentricity",
-    )
+    .select(DOMAIN_DETAIL_SELECT)
     .eq("user_id", userId)
     .eq("slug", slug)
     .maybeSingle();
+
+  if (isMissingSubtaskSchemaError(domainResult.error)) {
+    domainResult = await supabase
+      .schema("axis")
+      .from("domains")
+      .select(LEGACY_DOMAIN_DETAIL_SELECT)
+      .eq("user_id", userId)
+      .eq("slug", slug)
+      .maybeSingle();
+  }
+
+  const { data: domain, error: domainError } = domainResult;
 
   if (domainError) {
     throw new Error(`Failed to load domain: ${domainError.message}`);
@@ -46,6 +74,65 @@ async function getDomainDetail(userId: string, slug: string) {
     );
   }
 
+  const { data: subtasks, error: subtasksError } = await supabase
+    .schema("axis")
+    .from("domain_subtasks")
+    .select("id,label,sort_order")
+    .eq("domain_id", domain.id)
+    .eq("user_id", userId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (subtasksError && !isMissingSubtaskSchemaError(subtasksError)) {
+    throw new Error(`Failed to load domain subtasks: ${subtasksError.message}`);
+  }
+
+  const normalizedSettings = normalizeDomainSettings({
+    driftMode: domain.drift_mode,
+    driftThresholdHours: domain.drift_threshold_hours,
+    warningLeadHours: domain.warning_lead_hours,
+    commitmentRequirement: domain.commitment_requirement,
+    subtaskResetMode: domain.subtask_reset_mode,
+    subtaskTimeZone: domain.subtask_time_zone,
+    subtasks: (subtasksError ? [] : subtasks ?? []).map((subtask) => ({
+      id: subtask.id,
+      label: subtask.label,
+      sortOrder: subtask.sort_order,
+    })),
+    orbitSpeed: domain.orbit_speed,
+    visualIntensity: domain.visual_intensity,
+    planetSizeScale: domain.planet_size_scale,
+    orbitEccentricity: domain.orbit_eccentricity,
+  });
+
+  const subtaskCompletionKey = getSubtaskCompletionKey(
+    normalizedSettings.subtaskResetMode,
+    normalizedSettings.subtaskTimeZone,
+  );
+  const subtaskIds = normalizedSettings.subtasks.map((subtask) => subtask.id);
+  const completedSubtasksById = new Map<string, string>();
+
+  if (subtaskIds.length > 0) {
+    const { data: completions, error: completionsError } = await supabase
+      .schema("axis")
+      .from("domain_subtask_completions")
+      .select("subtask_id,completed_at")
+      .eq("domain_id", domain.id)
+      .eq("user_id", userId)
+      .eq("period_key", subtaskCompletionKey)
+      .in("subtask_id", subtaskIds);
+
+    if (completionsError && !isMissingSubtaskSchemaError(completionsError)) {
+      throw new Error(
+        `Failed to load domain subtask progress: ${completionsError.message}`,
+      );
+    }
+
+    for (const completion of (completionsError ? [] : completions ?? [])) {
+      completedSubtasksById.set(completion.subtask_id, completion.completed_at);
+    }
+  }
+
   return {
     id: domain.id,
     name: domain.name,
@@ -61,6 +148,8 @@ async function getDomainDetail(userId: string, slug: string) {
     driftThresholdHours: domain.drift_threshold_hours,
     warningLeadHours: domain.warning_lead_hours,
     commitmentRequirement: domain.commitment_requirement,
+    subtaskResetMode: domain.subtask_reset_mode,
+    subtaskTimeZone: domain.subtask_time_zone,
     orbitSpeed: domain.orbit_speed,
     visualIntensity: domain.visual_intensity,
     planetSizeScale: domain.planet_size_scale,
@@ -69,6 +158,11 @@ async function getDomainDetail(userId: string, slug: string) {
       id: commitment.id,
       text: commitment.text,
       createdAt: new Date(commitment.created_at),
+    })),
+    settings: normalizedSettings,
+    subtasks: normalizedSettings.subtasks.map((subtask) => ({
+      ...subtask,
+      completedAt: completedSubtasksById.get(subtask.id) ?? null,
     })),
   };
 }
@@ -103,20 +197,12 @@ export default async function DomainDetailPage({ params, searchParams }: DomainP
   return (
     <DomainView
       domain={domain}
-      settings={normalizeDomainSettings({
-        driftMode: domain.driftMode,
-        driftThresholdHours: domain.driftThresholdHours,
-        warningLeadHours: domain.warningLeadHours,
-        commitmentRequirement: domain.commitmentRequirement,
-        orbitSpeed: domain.orbitSpeed,
-        visualIntensity: domain.visualIntensity,
-        planetSizeScale: domain.planetSizeScale,
-        orbitEccentricity: domain.orbitEccentricity,
-      })}
+      settings={domain.settings}
       commitments={domain.commitments.map((commitment: DomainCommitment) => ({
         ...commitment,
         createdAt: commitment.createdAt.toISOString(),
       }))}
+      subtasks={domain.subtasks}
       alignChain={alignSlugs}
       alignIdx={alignIdx}
       demoUser={demoUser}
