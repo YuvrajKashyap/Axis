@@ -9,13 +9,17 @@ import {
   formatDriftThresholdLabel,
   getOrbitEccentricityRatio,
   getVisualIntensityMultiplier,
+  normalizeDomainSubtasks,
   normalizeDomainSettings,
+  normalizeSubtaskTimeZone,
   validateWarningLeadHours,
   type DomainCommitmentRequirementValue,
   type DomainDriftModeValue,
   type DomainOrbitEccentricityValue,
   type DomainOrbitSpeedValue,
   type DomainSettingsSnapshot,
+  type DomainSubtaskResetModeValue,
+  type DomainSubtaskSnapshot,
   type DomainVisualIntensityValue,
 } from "@/lib/domain-settings";
 import Link from "next/link";
@@ -63,6 +67,122 @@ type WarningLeadSelectValue =
 
 type SettingsTabKey = "behavior" | "motion" | "visual";
 
+type TimeZoneOption = {
+  value: string;
+  label: string;
+};
+
+type IntlWithTimeZoneValues = typeof Intl & {
+  supportedValuesOf?: (key: "timeZone") => string[];
+};
+
+const TIME_ZONE_OPTIONS: TimeZoneOption[] = [
+  { value: "UTC", label: "UTC" },
+  { value: "America/New_York", label: "Eastern Time (ET) - New York" },
+  { value: "America/Chicago", label: "Central Time (CT) - Chicago" },
+  { value: "America/Denver", label: "Mountain Time (MT) - Denver" },
+  { value: "America/Phoenix", label: "Arizona Time - Phoenix" },
+  { value: "America/Los_Angeles", label: "Pacific Time (PT) - Los Angeles" },
+  { value: "America/Anchorage", label: "Alaska Time - Anchorage" },
+  { value: "Pacific/Honolulu", label: "Hawaii Time - Honolulu" },
+  { value: "America/Toronto", label: "Eastern Time - Toronto" },
+  { value: "America/Vancouver", label: "Pacific Time - Vancouver" },
+  { value: "America/Mexico_City", label: "Mexico City" },
+  { value: "America/Bogota", label: "Bogota" },
+  { value: "America/Lima", label: "Lima" },
+  { value: "America/Santiago", label: "Santiago" },
+  { value: "America/Sao_Paulo", label: "Sao Paulo" },
+  { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires" },
+  { value: "Atlantic/Reykjavik", label: "Reykjavik" },
+  { value: "Europe/Dublin", label: "Dublin" },
+  { value: "Europe/London", label: "London" },
+  { value: "Europe/Lisbon", label: "Lisbon" },
+  { value: "Europe/Madrid", label: "Madrid" },
+  { value: "Europe/Paris", label: "Paris" },
+  { value: "Europe/Amsterdam", label: "Amsterdam" },
+  { value: "Europe/Berlin", label: "Berlin" },
+  { value: "Europe/Rome", label: "Rome" },
+  { value: "Europe/Zurich", label: "Zurich" },
+  { value: "Europe/Stockholm", label: "Stockholm" },
+  { value: "Europe/Warsaw", label: "Warsaw" },
+  { value: "Europe/Athens", label: "Athens" },
+  { value: "Europe/Istanbul", label: "Istanbul" },
+  { value: "Europe/Moscow", label: "Moscow" },
+  { value: "Africa/Casablanca", label: "Casablanca" },
+  { value: "Africa/Lagos", label: "Lagos" },
+  { value: "Africa/Cairo", label: "Cairo" },
+  { value: "Africa/Johannesburg", label: "Johannesburg" },
+  { value: "Africa/Nairobi", label: "Nairobi" },
+  { value: "Asia/Jerusalem", label: "Jerusalem" },
+  { value: "Asia/Dubai", label: "Dubai" },
+  { value: "Asia/Tehran", label: "Tehran" },
+  { value: "Asia/Karachi", label: "Karachi" },
+  { value: "Asia/Kolkata", label: "India Standard Time - Kolkata" },
+  { value: "Asia/Dhaka", label: "Dhaka" },
+  { value: "Asia/Bangkok", label: "Bangkok" },
+  { value: "Asia/Jakarta", label: "Jakarta" },
+  { value: "Asia/Singapore", label: "Singapore" },
+  { value: "Asia/Hong_Kong", label: "Hong Kong" },
+  { value: "Asia/Shanghai", label: "China Standard Time - Shanghai" },
+  { value: "Asia/Manila", label: "Manila" },
+  { value: "Asia/Seoul", label: "Seoul" },
+  { value: "Asia/Tokyo", label: "Tokyo" },
+  { value: "Australia/Perth", label: "Perth" },
+  { value: "Australia/Adelaide", label: "Adelaide" },
+  { value: "Australia/Brisbane", label: "Brisbane" },
+  { value: "Australia/Sydney", label: "Sydney" },
+  { value: "Australia/Melbourne", label: "Melbourne" },
+  { value: "Pacific/Auckland", label: "Auckland" },
+];
+
+const TIME_ZONE_LABELS = new Map(
+  TIME_ZONE_OPTIONS.map((option) => [option.value, option.label]),
+);
+
+function getSupportedTimeZoneValues() {
+  try {
+    return (
+      (Intl as IntlWithTimeZoneValues).supportedValuesOf?.("timeZone") ?? []
+    );
+  } catch {
+    return [];
+  }
+}
+
+function formatTimeZoneLabel(value: string) {
+  const knownLabel = TIME_ZONE_LABELS.get(value);
+  if (knownLabel) return knownLabel;
+
+  const [region, ...locationParts] = value.split("/");
+  const location = locationParts.join(" / ").replaceAll("_", " ");
+
+  if (!location) return value.replaceAll("_", " ");
+
+  return `${location} (${region})`;
+}
+
+function buildTimeZoneOptions(
+  supportedTimeZoneValues: string[],
+  currentTimeZone: string,
+): TimeZoneOption[] {
+  const options: TimeZoneOption[] = [];
+  const seen = new Set<string>();
+
+  const addOption = (value: string) => {
+    if (seen.has(value)) return;
+    seen.add(value);
+    options.push({ value, label: formatTimeZoneLabel(value) });
+  };
+
+  TIME_ZONE_OPTIONS.forEach((option) => addOption(option.value));
+  [...supportedTimeZoneValues]
+    .sort((first, second) => first.localeCompare(second))
+    .forEach(addOption);
+  addOption(normalizeSubtaskTimeZone(currentTimeZone));
+
+  return options;
+}
+
 function driftSelectFromSettings(
   settings: DomainSettingsSnapshot,
 ): DriftSelectValue {
@@ -100,6 +220,41 @@ function warningLeadSelectFromSettings(
     return `${settings.warningLeadHours}h` as WarningLeadSelectValue;
   }
   return "custom";
+}
+
+function createSubtaskId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const value = Math.floor(Math.random() * 16);
+    const next = char === "x" ? value : (value & 0x3) | 0x8;
+    return next.toString(16);
+  });
+}
+
+function createSubtask(label: string, sortOrder: number): DomainSubtaskSnapshot {
+  return {
+    id: createSubtaskId(),
+    label,
+    sortOrder,
+  };
+}
+
+function getStarterSubtasks(): DomainSubtaskSnapshot[] {
+  return [createSubtask("Task Name", 0)];
+}
+
+function getSubtasksForSettings(settings: DomainSettingsSnapshot) {
+  if (
+    settings.commitmentRequirement === "SUBTASKS" &&
+    settings.subtasks.length === 0
+  ) {
+    return getStarterSubtasks();
+  }
+
+  return settings.subtasks;
 }
 
 function hexToRgb(hex: string) {
@@ -345,50 +500,81 @@ export function DomainSettingsView({
   const [saveError, setSaveError] = useState("");
 
   const initialSettings = useMemo(() => normalizeDomainSettings(settings), [settings]);
+  const initialDraftSettings = useMemo(
+    () => ({
+      ...initialSettings,
+      subtasks: getSubtasksForSettings(initialSettings),
+    }),
+    [initialSettings],
+  );
   const defaultSettings = useMemo(
     () => normalizeDomainSettings(DEFAULT_DOMAIN_SETTINGS),
     [],
   );
 
-  const [savedSettings, setSavedSettings] = useState(initialSettings);
+  const [savedSettings, setSavedSettings] = useState(initialDraftSettings);
   const [autosaveRevision, setAutosaveRevision] = useState(0);
   const [driftSelect, setDriftSelect] = useState<DriftSelectValue>(
-    driftSelectFromSettings(initialSettings),
+    driftSelectFromSettings(initialDraftSettings),
   );
   const [customUnit, setCustomUnit] = useState<"hours" | "days">(
-    customUnitFromHours(initialSettings.driftThresholdHours),
+    customUnitFromHours(initialDraftSettings.driftThresholdHours),
   );
   const [customValue, setCustomValue] = useState(
-    customValueFromHours(initialSettings.driftThresholdHours),
+    customValueFromHours(initialDraftSettings.driftThresholdHours),
   );
   const [warningLeadSelect, setWarningLeadSelect] =
     useState<WarningLeadSelectValue>(
-      warningLeadSelectFromSettings(initialSettings),
+      warningLeadSelectFromSettings(initialDraftSettings),
     );
   const [warningCustomUnit, setWarningCustomUnit] = useState<"hours" | "days">(
     customUnitFromHours(
-      initialSettings.warningLeadHours ?? DEFAULT_WARNING_LEAD_HOURS,
+      initialDraftSettings.warningLeadHours ?? DEFAULT_WARNING_LEAD_HOURS,
     ),
   );
   const [warningCustomValue, setWarningCustomValue] = useState(
     customValueFromHours(
-      initialSettings.warningLeadHours ?? DEFAULT_WARNING_LEAD_HOURS,
+      initialDraftSettings.warningLeadHours ?? DEFAULT_WARNING_LEAD_HOURS,
     ),
   );
   const [commitmentRequirement, setCommitmentRequirement] =
     useState<DomainCommitmentRequirementValue>(
-      initialSettings.commitmentRequirement,
+      initialDraftSettings.commitmentRequirement,
     );
+  const [subtaskResetMode, setSubtaskResetMode] =
+    useState<DomainSubtaskResetModeValue>(initialDraftSettings.subtaskResetMode);
+  const [subtaskTimeZone, setSubtaskTimeZone] = useState(
+    initialDraftSettings.subtaskTimeZone,
+  );
+  const [supportedTimeZoneValues, setSupportedTimeZoneValues] = useState<
+    string[]
+  >([]);
+  const timeZoneOptions = useMemo(() => {
+    return buildTimeZoneOptions(supportedTimeZoneValues, subtaskTimeZone);
+  }, [subtaskTimeZone, supportedTimeZoneValues]);
+  const [subtasks, setSubtasks] = useState<DomainSubtaskSnapshot[]>(
+    initialDraftSettings.subtasks,
+  );
   const [orbitSpeed, setOrbitSpeed] = useState<DomainOrbitSpeedValue>(
-    initialSettings.orbitSpeed,
+    initialDraftSettings.orbitSpeed,
   );
   const [orbitEccentricity, setOrbitEccentricity] =
-    useState<DomainOrbitEccentricityValue>(initialSettings.orbitEccentricity);
+    useState<DomainOrbitEccentricityValue>(
+      initialDraftSettings.orbitEccentricity,
+    );
   const [visualIntensity, setVisualIntensity] =
-    useState<DomainVisualIntensityValue>(initialSettings.visualIntensity);
+    useState<DomainVisualIntensityValue>(initialDraftSettings.visualIntensity);
   const [planetSizeScale, setPlanetSizeScale] = useState(
-    initialSettings.planetSizeScale,
+    initialDraftSettings.planetSizeScale,
   );
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setSupportedTimeZoneValues(getSupportedTimeZoneValues());
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   const applySettings = (nextSettings: DomainSettingsSnapshot) => {
     setSaveState("idle");
@@ -408,6 +594,9 @@ export function DomainSettingsView({
       ),
     );
     setCommitmentRequirement(nextSettings.commitmentRequirement);
+    setSubtaskResetMode(nextSettings.subtaskResetMode);
+    setSubtaskTimeZone(nextSettings.subtaskTimeZone);
+    setSubtasks(getSubtasksForSettings(nextSettings));
     setOrbitSpeed(nextSettings.orbitSpeed);
     setOrbitEccentricity(nextSettings.orbitEccentricity);
     setVisualIntensity(nextSettings.visualIntensity);
@@ -418,6 +607,40 @@ export function DomainSettingsView({
     setSaveState("idle");
     setSaveError("");
     setAutosaveRevision((value) => value + 1);
+  };
+
+  const changeCommitmentRequirement = (
+    value: DomainCommitmentRequirementValue,
+  ) => {
+    setCommitmentRequirement(value);
+    if (value === "SUBTASKS" && subtasks.length === 0) {
+      setSubtasks(getStarterSubtasks());
+    }
+    queueAutosave();
+  };
+
+  const addSubtask = () => {
+    setSubtasks((current) => [
+      ...current,
+      createSubtask("", current.length),
+    ]);
+  };
+
+  const updateSubtaskLabel = (id: string, label: string) => {
+    setSubtasks((current) =>
+      current.map((subtask) =>
+        subtask.id === id ? { ...subtask, label } : subtask,
+      ),
+    );
+  };
+
+  const removeSubtask = (id: string) => {
+    setSubtasks((current) =>
+      current
+        .filter((subtask) => subtask.id !== id)
+        .map((subtask, index) => ({ ...subtask, sortOrder: index })),
+    );
+    queueAutosave();
   };
 
   const changeCustomUnit = (nextUnit: "hours" | "days") => {
@@ -484,6 +707,9 @@ export function DomainSettingsView({
       driftThresholdHours,
       warningLeadHours,
       commitmentRequirement,
+      subtaskResetMode,
+      subtaskTimeZone: normalizeSubtaskTimeZone(subtaskTimeZone),
+      subtasks: normalizeDomainSubtasks(subtasks),
       orbitSpeed,
       orbitEccentricity,
       visualIntensity,
@@ -497,6 +723,9 @@ export function DomainSettingsView({
     orbitEccentricity,
     orbitSpeed,
     planetSizeScale,
+    subtaskResetMode,
+    subtaskTimeZone,
+    subtasks,
     visualIntensity,
     warningLeadSelect,
   ]);
@@ -589,7 +818,16 @@ export function DomainSettingsView({
       value:
         draftSettings.commitmentRequirement === "STANDARD"
           ? "standard"
-          : "passive",
+          : draftSettings.commitmentRequirement === "PASSIVE_ALIGNMENT"
+            ? "passive"
+            : "subtasks",
+    },
+    {
+      label: "Tasks",
+      value:
+        draftSettings.commitmentRequirement === "SUBTASKS"
+          ? String(draftSettings.subtasks.length)
+          : "off",
     },
     { label: "Speed", value: draftSettings.orbitSpeed.toLowerCase() },
     {
@@ -1054,7 +1292,7 @@ export function DomainSettingsView({
 
                 <SettingRow
                   label="Commitment Requirement"
-                  detail="Standard preserves the current app behavior. Passive counts reaching the commit section as a recommit."
+                  detail="Choose what renews this planet: a written commitment, a passive touch, or a completed checklist."
                 >
                   <div className="flex flex-wrap gap-2">
                     <Pill
@@ -1062,23 +1300,119 @@ export function DomainSettingsView({
                       current={commitmentRequirement}
                       label="Standard"
                       accentColor={accentColor}
-                      onChange={(value) => {
-                        setCommitmentRequirement(value);
-                        queueAutosave();
-                      }}
+                      onChange={changeCommitmentRequirement}
                     />
                     <Pill
                       value="PASSIVE_ALIGNMENT"
                       current={commitmentRequirement}
                       label="Passive"
                       accentColor={accentColor}
-                      onChange={(value) => {
-                        setCommitmentRequirement(value);
-                        queueAutosave();
-                      }}
+                      onChange={changeCommitmentRequirement}
+                    />
+                    <Pill
+                      value="SUBTASKS"
+                      current={commitmentRequirement}
+                      label="Subtasks"
+                      accentColor={accentColor}
+                      onChange={changeCommitmentRequirement}
                     />
                   </div>
                 </SettingRow>
+
+                {commitmentRequirement === "SUBTASKS" ? (
+                  <SettingRow
+                    label="Subtasks"
+                    detail="These replace the commit message. The planet renews only after every item is checked."
+                  >
+                    <div className="space-y-5">
+                      <div className="flex flex-wrap gap-2">
+                        <Pill
+                          value="DAILY"
+                          current={subtaskResetMode}
+                          label="Daily"
+                          accentColor={accentColor}
+                          onChange={(value) => {
+                            setSubtaskResetMode(value);
+                            queueAutosave();
+                          }}
+                        />
+                        <Pill
+                          value="DRIFT_CYCLE"
+                          current={subtaskResetMode}
+                          label="Until complete"
+                          accentColor={accentColor}
+                          onChange={(value) => {
+                            setSubtaskResetMode(value);
+                            queueAutosave();
+                          }}
+                        />
+                      </div>
+
+                      {subtaskResetMode === "DAILY" ? (
+                        <div>
+                          <label className="mb-2 block text-[10px] font-mono uppercase tracking-[0.24em] text-zinc-500">
+                            Reset Time Zone
+                          </label>
+                          <select
+                            name="subtaskTimeZone"
+                            value={subtaskTimeZone}
+                            onChange={(e) => {
+                              setSubtaskTimeZone(e.target.value);
+                              queueAutosave();
+                            }}
+                            className="w-full rounded border border-white/[0.06] bg-zinc-950 px-3 py-2 text-[11px] font-mono text-zinc-200 outline-none transition-colors focus:border-white/12"
+                          >
+                            {timeZoneOptions.map((timeZone) => (
+                              <option
+                                key={timeZone.value}
+                                value={timeZone.value}
+                              >
+                                {timeZone.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : null}
+
+                      <div className="space-y-2">
+                        {subtasks.map((subtask, index) => (
+                          <div
+                            key={subtask.id}
+                            className="flex items-center gap-2"
+                          >
+                            <span className="w-5 shrink-0 text-right text-[9px] font-mono text-zinc-700">
+                              {String(index + 1).padStart(2, "0")}
+                            </span>
+                            <input
+                              value={subtask.label}
+                              onChange={(e) =>
+                                updateSubtaskLabel(subtask.id, e.target.value)
+                              }
+                              onBlur={queueAutosave}
+                              placeholder="Name this subtask"
+                              className="min-w-0 flex-1 rounded border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-sm text-zinc-200 outline-none transition-colors placeholder:text-zinc-700 focus:border-white/12"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeSubtask(subtask.id)}
+                              className="shrink-0 px-2 py-2 text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-600 transition-colors hover:text-red-400/70"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={addSubtask}
+                        className="text-[10px] font-mono uppercase tracking-[0.28em] text-zinc-500 transition-colors hover:text-zinc-300"
+                      >
+                        Add subtask
+                      </button>
+                    </div>
+                  </SettingRow>
+                ) : null}
               </div>
             ) : null}
 
