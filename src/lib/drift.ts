@@ -21,7 +21,7 @@ export function getLastRelevantActivityAt(input: {
   lastCommitmentAt: Date | null;
   lastPassiveAlignmentAt: Date | null;
 }): Date | null {
-  if (input.commitmentRequirement !== "PASSIVE_ALIGNMENT") {
+  if (input.commitmentRequirement === "STANDARD") {
     return input.lastCommitmentAt;
   }
 
