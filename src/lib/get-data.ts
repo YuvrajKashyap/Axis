@@ -35,7 +35,13 @@ type SupabaseDomainRow = {
   commitment_requirement:
     | "STANDARD"
     | "PASSIVE_ALIGNMENT"
+    | "SUBTASKS"
     | null;
+  subtask_reset_mode?:
+    | "DAILY"
+    | "DRIFT_CYCLE"
+    | null;
+  subtask_time_zone?: string | null;
   orbit_speed:
     | "STILL"
     | "SLOW"
@@ -105,6 +111,10 @@ function mapDomainRow(
     commitmentRequirement:
       row.commitment_requirement ??
       DEFAULT_DOMAIN_SETTINGS.commitmentRequirement,
+    subtaskResetMode:
+      row.subtask_reset_mode ?? DEFAULT_DOMAIN_SETTINGS.subtaskResetMode,
+    subtaskTimeZone:
+      row.subtask_time_zone ?? DEFAULT_DOMAIN_SETTINGS.subtaskTimeZone,
     orbitSpeed: row.orbit_speed ?? DEFAULT_DOMAIN_SETTINGS.orbitSpeed,
     visualIntensity:
       row.visual_intensity ?? DEFAULT_DOMAIN_SETTINGS.visualIntensity,
