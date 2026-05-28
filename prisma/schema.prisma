@@ -13,6 +13,8 @@ model User {
   name        String?
   domains     Domain[]
   commitments Commitment[]
+  subtasks    DomainSubtask[]
+  subtaskCompletions DomainSubtaskCompletion[]
   settings    UserSettings?
 
   createdAt   DateTime      @default(now())
@@ -38,6 +40,8 @@ model Domain {
   driftMode   DomainDriftMode @default(PRESET)
   driftThresholdHours Int     @default(72)
   commitmentRequirement DomainCommitmentRequirement @default(STANDARD)
+  subtaskResetMode DomainSubtaskResetMode @default(DAILY)
+  subtaskTimeZone String @default("UTC")
   orbitSpeed DomainOrbitSpeed @default(STANDARD)
   visualIntensity DomainVisualIntensity @default(BALANCED)
   planetSizeScale Float @default(1)
@@ -52,6 +56,8 @@ model Domain {
 
   user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   commitments Commitment[]
+  subtasks    DomainSubtask[]
+  subtaskCompletions DomainSubtaskCompletion[]
 
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
@@ -71,6 +77,41 @@ model Commitment {
 
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
+}
+
+model DomainSubtask {
+  id          String                    @id @default(cuid())
+  userId      String
+  domainId    String
+  label       String
+  sortOrder   Int                       @default(0)
+
+  user        User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domain      Domain                    @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  completions DomainSubtaskCompletion[]
+
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+
+  @@index([userId, domainId, sortOrder])
+}
+
+model DomainSubtaskCompletion {
+  id          String        @id @default(cuid())
+  userId      String
+  domainId    String
+  subtaskId   String
+  periodKey   String
+  completedAt DateTime      @default(now())
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domain      Domain        @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  subtask     DomainSubtask @relation(fields: [subtaskId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime      @default(now())
+
+  @@unique([subtaskId, periodKey])
+  @@index([userId, domainId, periodKey])
 }
 
 model UserSettings {
@@ -100,6 +141,12 @@ enum DomainDriftMode {
 enum DomainCommitmentRequirement {
   STANDARD
   PASSIVE_ALIGNMENT
+  SUBTASKS
+}
+
+enum DomainSubtaskResetMode {
+  DAILY
+  DRIFT_CYCLE
 }
 
 enum DomainOrbitSpeed {
