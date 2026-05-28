@@ -16,7 +16,7 @@ type PublicDemoRow = {
   drift_mode: "PRESET" | "CUSTOM" | "NEVER" | null;
   drift_threshold_hours: number | null;
   warning_lead_hours: number | null;
-  commitment_requirement: "STANDARD" | "PASSIVE_ALIGNMENT" | null;
+  commitment_requirement: "STANDARD" | "PASSIVE_ALIGNMENT" | "SUBTASKS" | null;
   orbit_speed: "STILL" | "SLOW" | "STANDARD" | "FAST" | null;
   visual_intensity: "SUBTLE" | "BALANCED" | "INTENSE" | null;
   planet_size_scale: number | null;

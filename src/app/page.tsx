@@ -32,6 +32,8 @@ function toOrreryData(domains: DomainList): DomainData[] {
       driftThresholdHours: domain.driftThresholdHours,
       warningLeadHours: domain.warningLeadHours,
       commitmentRequirement: domain.commitmentRequirement,
+      subtaskResetMode: domain.subtaskResetMode,
+      subtaskTimeZone: domain.subtaskTimeZone,
       orbitSpeed: domain.orbitSpeed,
       visualIntensity: domain.visualIntensity,
       planetSizeScale: domain.planetSizeScale,
