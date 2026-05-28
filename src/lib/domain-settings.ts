@@ -13,9 +13,17 @@ export type DomainDriftModeValue = (typeof DRIFT_MODE_VALUES)[number];
 export const COMMITMENT_REQUIREMENT_VALUES = [
   "STANDARD",
   "PASSIVE_ALIGNMENT",
+  "SUBTASKS",
 ] as const;
 export type DomainCommitmentRequirementValue =
   (typeof COMMITMENT_REQUIREMENT_VALUES)[number];
+
+export const SUBTASK_RESET_MODE_VALUES = [
+  "DAILY",
+  "DRIFT_CYCLE",
+] as const;
+export type DomainSubtaskResetModeValue =
+  (typeof SUBTASK_RESET_MODE_VALUES)[number];
 
 export const ORBIT_SPEED_VALUES = [
   "STILL",
@@ -44,12 +52,22 @@ export type DomainOrbitEccentricityValue =
 export const PLANET_SIZE_SCALE_MIN = 0.3;
 export const PLANET_SIZE_SCALE_MAX = 1.7;
 export const PLANET_SIZE_SCALE_DEFAULT = 1;
+export const DEFAULT_SUBTASK_TIME_ZONE = "UTC";
+
+export type DomainSubtaskSnapshot = {
+  id: string;
+  label: string;
+  sortOrder: number;
+};
 
 export type DomainSettingsSnapshot = {
   driftMode: DomainDriftModeValue;
   driftThresholdHours: number;
   warningLeadHours: number | null;
   commitmentRequirement: DomainCommitmentRequirementValue;
+  subtaskResetMode: DomainSubtaskResetModeValue;
+  subtaskTimeZone: string;
+  subtasks: DomainSubtaskSnapshot[];
   orbitSpeed: DomainOrbitSpeedValue;
   visualIntensity: DomainVisualIntensityValue;
   planetSizeScale: number;
@@ -61,6 +79,9 @@ export const DEFAULT_DOMAIN_SETTINGS: DomainSettingsSnapshot = {
   driftThresholdHours: DEFAULT_DRIFT_THRESHOLD_HOURS,
   warningLeadHours: DEFAULT_WARNING_LEAD_HOURS,
   commitmentRequirement: "STANDARD",
+  subtaskResetMode: "DAILY",
+  subtaskTimeZone: DEFAULT_SUBTASK_TIME_ZONE,
+  subtasks: [],
   orbitSpeed: "STANDARD",
   visualIntensity: "BALANCED",
   planetSizeScale: PLANET_SIZE_SCALE_DEFAULT,
@@ -86,6 +107,62 @@ export function clampWarningLeadHours(value: number): number {
 export function clampPlanetSizeScale(value: number): number {
   if (!Number.isFinite(value)) return PLANET_SIZE_SCALE_DEFAULT;
   return Math.min(PLANET_SIZE_SCALE_MAX, Math.max(PLANET_SIZE_SCALE_MIN, value));
+}
+
+export function isValidTimeZone(value: string): boolean {
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function normalizeSubtaskTimeZone(value: string | null | undefined) {
+  const trimmed = value?.trim() || DEFAULT_SUBTASK_TIME_ZONE;
+  return isValidTimeZone(trimmed) ? trimmed : DEFAULT_SUBTASK_TIME_ZONE;
+}
+
+export function normalizeDomainSubtasks(
+  subtasks: DomainSubtaskSnapshot[] | null | undefined,
+): DomainSubtaskSnapshot[] {
+  if (!Array.isArray(subtasks)) return [];
+
+  return subtasks
+    .map((subtask, index) => ({
+      id: subtask.id,
+      label: subtask.label.trim(),
+      sortOrder: Number.isFinite(subtask.sortOrder)
+        ? Math.max(0, Math.round(subtask.sortOrder))
+        : index,
+    }))
+    .filter((subtask) => subtask.id && subtask.label.length > 0)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label))
+    .map((subtask, index) => ({
+      ...subtask,
+      sortOrder: index,
+    }));
+}
+
+export function getSubtaskCompletionKey(
+  resetMode: DomainSubtaskResetModeValue,
+  timeZone: string,
+  date: Date = new Date(),
+): string {
+  if (resetMode === "DRIFT_CYCLE") return "drift-cycle";
+
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: normalizeSubtaskTimeZone(timeZone),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+  const month = parts.find((part) => part.type === "month")?.value ?? "00";
+  const day = parts.find((part) => part.type === "day")?.value ?? "00";
+
+  return `${year}-${month}-${day}`;
 }
 
 export function getEffectiveDriftThresholdHours(
@@ -227,6 +304,13 @@ export function normalizeDomainSettings(
       COMMITMENT_REQUIREMENT_VALUES.includes(partial.commitmentRequirement)
         ? partial.commitmentRequirement
         : DEFAULT_DOMAIN_SETTINGS.commitmentRequirement,
+    subtaskResetMode:
+      partial?.subtaskResetMode &&
+      SUBTASK_RESET_MODE_VALUES.includes(partial.subtaskResetMode)
+        ? partial.subtaskResetMode
+        : DEFAULT_DOMAIN_SETTINGS.subtaskResetMode,
+    subtaskTimeZone: normalizeSubtaskTimeZone(partial?.subtaskTimeZone),
+    subtasks: normalizeDomainSubtasks(partial?.subtasks),
     orbitSpeed:
       partial?.orbitSpeed && ORBIT_SPEED_VALUES.includes(partial.orbitSpeed)
         ? partial.orbitSpeed
