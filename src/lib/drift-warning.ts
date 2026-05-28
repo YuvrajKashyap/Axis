@@ -37,6 +37,7 @@ type WarningScheduleOverrides = {
   source?:
     | "commitment"
     | "passive-alignment"
+    | "subtasks"
     | "settings-save"
     | "status-update"
     | "unknown";
