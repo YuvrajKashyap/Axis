@@ -9,6 +9,7 @@ import {
   deleteDomain,
   loadAllCommitments,
   recordPassiveAlignmentTouch,
+  setDomainSubtaskCompletion,
   updateDomainColor,
   updateDomainFields,
   updateDomainName,
@@ -17,6 +18,7 @@ import {
 import {
   formatDriftThresholdLabel,
   getEffectiveDriftThresholdHours,
+  getSubtaskCompletionKey,
   type DomainSettingsSnapshot,
 } from "@/lib/domain-settings";
 import { QUOTES } from "./quotes";
@@ -226,6 +228,13 @@ type Commitment = {
   createdAt: string;
 };
 
+type Subtask = {
+  id: string;
+  label: string;
+  sortOrder: number;
+  completedAt: string | null;
+};
+
 const DOMAIN_STATUS_OPTIONS = ["ALIGNED", "DRIFTING", "ARCHIVED"] as const;
 type DomainStatusOption = (typeof DOMAIN_STATUS_OPTIONS)[number];
 
@@ -244,6 +253,7 @@ type DomainViewProps = {
   };
   settings: DomainSettingsSnapshot;
   commitments: Commitment[];
+  subtasks: Subtask[];
   alignChain?: string[] | null;
   alignIdx?: number;
   demoUser?: string;
@@ -257,6 +267,7 @@ export function DomainView({
   domain,
   settings,
   commitments,
+  subtasks,
   alignChain,
   alignIdx = 0,
   demoUser,
@@ -270,6 +281,11 @@ export function DomainView({
   const [isPending, startTransition] = useTransition();
   const [showHistory, setShowHistory] = useState(false);
   const [historyItems, setHistoryItems] = useState(commitments);
+  const [subtaskItems, setSubtaskItems] = useState(subtasks);
+  const [subtaskError, setSubtaskError] = useState("");
+  const [subtaskPeriodKey, setSubtaskPeriodKey] = useState(() =>
+    getSubtaskCompletionKey(settings.subtaskResetMode, settings.subtaskTimeZone),
+  );
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -282,6 +298,12 @@ export function DomainView({
   const passiveAlignmentRecordedRef = useRef(false);
   const effectiveDriftThresholdHours = getEffectiveDriftThresholdHours(settings);
   const usesPassiveAlignment = settings.commitmentRequirement === "PASSIVE_ALIGNMENT";
+  const usesSubtasks = settings.commitmentRequirement === "SUBTASKS";
+  const completedSubtaskCount = subtaskItems.filter(
+    (subtask) => subtask.completedAt,
+  ).length;
+  const allSubtasksComplete =
+    subtaskItems.length > 0 && completedSubtaskCount === subtaskItems.length;
 
   // Navigation helpers for demo-edit mode
   const buildHomeUrl = useCallback((pulseDomainId?: string) => {
@@ -369,6 +391,43 @@ export function DomainView({
   }, []);
 
   useEffect(() => {
+    setSubtaskItems(subtasks);
+  }, [subtasks]);
+
+  useEffect(() => {
+    setSubtaskPeriodKey(
+      getSubtaskCompletionKey(settings.subtaskResetMode, settings.subtaskTimeZone),
+    );
+  }, [settings.subtaskResetMode, settings.subtaskTimeZone]);
+
+  useEffect(() => {
+    if (!usesSubtasks || settings.subtaskResetMode !== "DAILY") return;
+
+    const timer = window.setInterval(() => {
+      const nextPeriodKey = getSubtaskCompletionKey(
+        settings.subtaskResetMode,
+        settings.subtaskTimeZone,
+      );
+
+      if (nextPeriodKey === subtaskPeriodKey) return;
+
+      setSubtaskPeriodKey(nextPeriodKey);
+      setSubtaskItems((current) =>
+        current.map((subtask) => ({ ...subtask, completedAt: null })),
+      );
+      router.refresh();
+    }, 30 * 1000);
+
+    return () => window.clearInterval(timer);
+  }, [
+    router,
+    settings.subtaskResetMode,
+    settings.subtaskTimeZone,
+    subtaskPeriodKey,
+    usesSubtasks,
+  ]);
+
+  useEffect(() => {
     passiveAlignmentRecordedRef.current = false;
 
     if (settings.commitmentRequirement !== "PASSIVE_ALIGNMENT") return;
@@ -441,6 +500,26 @@ export function DomainView({
     router.push(homeUrl);
   }, [alignChain, alignIdx, domainLink, homeUrl, isAligning, isLastInChain, router]);
 
+  const startAlignmentOverlay = useCallback(() => {
+    const postCommitHref = getPostCommitHref();
+    router.prefetch(postCommitHref);
+    clearQuoteTimers();
+    setQuoteText(getRandomQuote());
+    setQuoteOverlay(true);
+    setQuotePhase("burst");
+    quoteTimersRef.current = [
+      setTimeout(() => setQuotePhase("reveal"), QUOTE_REVEAL_DELAY_MS),
+      setTimeout(() => setQuotePhase("hold"), QUOTE_HOLD_DELAY_MS),
+      setTimeout(() => {
+        navigateAfterCommit();
+      }, QUOTE_NAVIGATE_DELAY_MS),
+      setTimeout(() => {
+        setQuotePhase("gone");
+        setQuoteOverlay(false);
+      }, QUOTE_FALLBACK_CLEAR_DELAY_MS),
+    ];
+  }, [clearQuoteTimers, getPostCommitHref, navigateAfterCommit, router]);
+
   const handleCommit = useCallback(() => {
     if (!text.trim()) return;
     setCommitError("");
@@ -452,30 +531,77 @@ export function DomainView({
           return;
         }
 
-        const postCommitHref = getPostCommitHref();
-        router.prefetch(postCommitHref);
-        clearQuoteTimers();
         setText("");
-        setQuoteText(getRandomQuote());
-        setQuoteOverlay(true);
-        setQuotePhase("burst");
-        // Phase timeline: burst(0) → reveal(800ms) → hold(4.5s) → collapse(5.5s) → navigate(6.2s)
-        quoteTimersRef.current = [
-          setTimeout(() => setQuotePhase("reveal"), QUOTE_REVEAL_DELAY_MS),
-          setTimeout(() => setQuotePhase("hold"), QUOTE_HOLD_DELAY_MS),
-          setTimeout(() => {
-            navigateAfterCommit();
-          }, QUOTE_NAVIGATE_DELAY_MS),
-          setTimeout(() => {
-            setQuotePhase("gone");
-            setQuoteOverlay(false);
-          }, QUOTE_FALLBACK_CLEAR_DELAY_MS),
-        ];
+        startAlignmentOverlay();
       } catch {
         setCommitError("Failed to create commitment.");
       }
     });
-  }, [clearQuoteTimers, demoUser, domain.id, getPostCommitHref, navigateAfterCommit, router, startTransition, text]);
+  }, [demoUser, domain.id, startAlignmentOverlay, startTransition, text]);
+
+  const handleSubtaskToggle = useCallback(
+    (subtask: Subtask) => {
+      if (allSubtasksComplete || isPending) return;
+
+      const nextCompleted = !subtask.completedAt;
+      const optimisticCompletedAt = new Date().toISOString();
+      setSubtaskError("");
+      setSubtaskItems((current) =>
+        current.map((item) =>
+          item.id === subtask.id
+            ? {
+                ...item,
+                completedAt: nextCompleted ? optimisticCompletedAt : null,
+              }
+            : item,
+        ),
+      );
+
+      startTransition(async () => {
+        const result = await setDomainSubtaskCompletion(
+          domain.id,
+          subtask.id,
+          nextCompleted,
+          demoUser,
+        );
+
+        if (!result.success) {
+          setSubtaskError(result.error);
+          setSubtaskItems((current) =>
+            current.map((item) =>
+              item.id === subtask.id
+                ? { ...item, completedAt: subtask.completedAt }
+                : item,
+            ),
+          );
+          return;
+        }
+
+        const completedIds = new Set(result.completedSubtaskIds);
+        setSubtaskItems((current) =>
+          current.map((item) => ({
+            ...item,
+            completedAt: completedIds.has(item.id)
+              ? item.completedAt ?? optimisticCompletedAt
+              : null,
+          })),
+        );
+
+        if (result.aligned) {
+          setCurrentStatus("ALIGNED");
+          startAlignmentOverlay();
+        }
+      });
+    },
+    [
+      allSubtasksComplete,
+      demoUser,
+      domain.id,
+      isPending,
+      startAlignmentOverlay,
+      startTransition,
+    ],
+  );
 
   const handleSkip = useCallback(() => {
     if (isAligning) {
@@ -1085,7 +1211,11 @@ export function DomainView({
                 {effectiveDriftThresholdHours === null
                   ? "Auto-drift is deactivated"
                   : `${formatDriftThresholdLabel(effectiveDriftThresholdHours)} without ${
-                      usesPassiveAlignment ? "an alignment touch" : "a commitment"
+                      usesSubtasks
+                        ? "a completed checklist"
+                        : usesPassiveAlignment
+                          ? "an alignment touch"
+                          : "a commitment"
                     }`}
               </p>
               <p
@@ -1094,9 +1224,11 @@ export function DomainView({
               >
                 {effectiveDriftThresholdHours === null
                   ? "This planet only drifts if you move it there yourself."
-                  : usesPassiveAlignment
-                    ? "Reaching Commit or saving a commitment refreshes this planet."
-                    : "and this planet drifts out of orbit."}
+                  : usesSubtasks
+                    ? "Every checked item must be complete before the timer renews."
+                    : usesPassiveAlignment
+                      ? "Reaching Commit or saving a commitment refreshes this planet."
+                      : "and this planet drifts out of orbit."}
               </p>
             </div>
           </div>
@@ -1112,8 +1244,111 @@ export function DomainView({
               className="text-[10px] font-mono tracking-[0.5em] uppercase mb-8"
               style={{ color: `rgba(${r},${g},${b},0.3)` }}
             >
-              Commit
+              {usesSubtasks ? "Tasks" : "Commit"}
             </p>
+            {usesSubtasks ? (
+              <div>
+                {subtaskItems.length > 0 ? (
+                  <div className="mx-auto max-w-sm">
+                    <div className="mb-5 flex items-center justify-between gap-4 border-b border-white/[0.04] pb-3">
+                      <p className="text-left text-[10px] font-mono uppercase tracking-[0.28em] text-zinc-600">
+                        {completedSubtaskCount} / {subtaskItems.length}
+                      </p>
+                      <p
+                        className="text-right text-[10px] font-mono uppercase tracking-[0.28em]"
+                        style={{
+                          color: allSubtasksComplete
+                            ? `rgba(${r},${g},${b},0.55)`
+                            : "rgba(113,113,122,0.8)",
+                        }}
+                      >
+                        {allSubtasksComplete ? "Aligned" : "Pending"}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1 text-left">
+                      {subtaskItems.map((subtask) => {
+                        const checked = !!subtask.completedAt;
+                        return (
+                          <button
+                            key={subtask.id}
+                            type="button"
+                            role="checkbox"
+                            aria-checked={checked}
+                            disabled={isPending || allSubtasksComplete}
+                            onClick={() => handleSubtaskToggle(subtask)}
+                            className="group flex w-full items-center gap-4 py-3 text-left transition-opacity disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            <span
+                              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-all"
+                              style={{
+                                borderColor: checked
+                                  ? `rgba(${r},${g},${b},0.5)`
+                                  : "rgba(255,255,255,0.1)",
+                                backgroundColor: checked
+                                  ? `rgba(${r},${g},${b},0.12)`
+                                  : "transparent",
+                                boxShadow: checked
+                                  ? `0 0 16px rgba(${r},${g},${b},0.12)`
+                                  : "none",
+                              }}
+                            >
+                              {checked ? (
+                                <span
+                                  className="h-1.5 w-1.5 rounded-full"
+                                  style={{
+                                    backgroundColor: `rgba(${r},${g},${b},0.8)`,
+                                  }}
+                                />
+                              ) : null}
+                            </span>
+                            <span
+                              className={`min-w-0 flex-1 text-sm leading-6 tracking-wide transition-colors ${
+                                checked
+                                  ? "text-zinc-500 line-through decoration-white/10"
+                                  : "text-zinc-300 group-hover:text-zinc-100"
+                              }`}
+                            >
+                              {subtask.label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mx-auto max-w-sm border-y border-white/[0.04] py-8">
+                    <p className="text-sm leading-7 text-zinc-500">
+                      No subtasks configured yet.
+                    </p>
+                    <Link
+                      href={settingsHref}
+                      className="mt-5 inline-block text-[10px] font-mono uppercase tracking-[0.32em] text-zinc-500 transition-colors hover:text-zinc-300"
+                    >
+                      Add subtasks
+                    </Link>
+                  </div>
+                )}
+
+                {subtaskError ? (
+                  <p className="mt-4 text-center text-xs font-mono text-red-400/80">
+                    {subtaskError}
+                  </p>
+                ) : null}
+
+                {isAligning ? (
+                  <div className="mt-8 flex justify-center">
+                    <button
+                      onClick={handleSkip}
+                      className="text-[10px] font-mono tracking-[0.4em] uppercase text-zinc-500 transition-colors duration-500 hover:text-zinc-300"
+                    >
+                      Skip →
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <>
             <input
               type="text"
               value={text}
@@ -1200,6 +1435,9 @@ export function DomainView({
             )}
 
             {/* Drift note — mobile only */}
+              </>
+            )}
+
             <div className="lg:hidden mt-16 flex items-center justify-center gap-3">
               <div
                 className="w-8 h-px shrink-0"
@@ -1209,7 +1447,11 @@ export function DomainView({
                 {effectiveDriftThresholdHours === null
                   ? "drift deactivated"
                   : `${formatCompactThreshold(effectiveDriftThresholdHours)} no ${
-                      usesPassiveAlignment ? "alignment touch" : "commit"
+                      usesSubtasks
+                        ? "completed list"
+                        : usesPassiveAlignment
+                          ? "alignment touch"
+                          : "commit"
                     }`}
                 <span
                   className="italic tracking-wide ml-1"

@@ -1,6 +1,7 @@
 'use server';
 
 import { scheduleDomainDriftWarning } from "@/lib/drift-warning";
+import { getSubtaskCompletionKey } from "@/lib/domain-settings";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getAuthorizedTargetUserId } from "@/lib/target-user";
 import { revalidatePath } from "next/cache";
@@ -14,6 +15,15 @@ type CommitmentRecord = {
   text: string;
   createdAt: string;
 };
+
+type SetSubtaskCompletionResult =
+  | {
+      success: true;
+      completedSubtaskIds: string[];
+      aligned: boolean;
+      reset: boolean;
+    }
+  | { success: false; error: string };
 
 async function scheduleDomainDriftWarningSafely(domainId: string) {
   try {
@@ -286,6 +296,202 @@ export async function recordPassiveAlignmentTouch(
   }
   revalidatePath("/");
   return { success: true };
+}
+
+export async function setDomainSubtaskCompletion(
+  domainId: string,
+  subtaskId: string,
+  completed: boolean,
+  targetUserId?: string,
+): Promise<SetSubtaskCompletionResult> {
+  const userId = await getAuthorizedTargetUserId(targetUserId);
+  if (!userId) {
+    return { success: false, error: "Not signed in." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: domain, error: domainError } = await supabase
+    .schema("axis")
+    .from("domains")
+    .select("id,slug,commitment_requirement,subtask_reset_mode,subtask_time_zone")
+    .eq("id", domainId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (domainError) {
+    return { success: false, error: domainError.message };
+  }
+
+  if (!domain) {
+    return { success: false, error: "Domain not found." };
+  }
+
+  if (domain.commitment_requirement !== "SUBTASKS") {
+    return {
+      success: false,
+      error: "This domain is not configured for subtasks.",
+    };
+  }
+
+  const { data: subtask, error: subtaskError } = await supabase
+    .schema("axis")
+    .from("domain_subtasks")
+    .select("id")
+    .eq("id", subtaskId)
+    .eq("domain_id", domain.id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (subtaskError) {
+    return { success: false, error: subtaskError.message };
+  }
+
+  if (!subtask) {
+    return { success: false, error: "Subtask not found." };
+  }
+
+  const periodKey = getSubtaskCompletionKey(
+    domain.subtask_reset_mode ?? "DAILY",
+    domain.subtask_time_zone ?? "UTC",
+  );
+  const completedAt = new Date();
+
+  if (completed) {
+    const { error: upsertError } = await supabase
+      .schema("axis")
+      .from("domain_subtask_completions")
+      .upsert(
+        {
+          domain_id: domain.id,
+          user_id: userId,
+          subtask_id: subtask.id,
+          period_key: periodKey,
+          completed_at: completedAt.toISOString(),
+        },
+        { onConflict: "subtask_id,period_key" },
+      );
+
+    if (upsertError) {
+      return { success: false, error: upsertError.message };
+    }
+  } else {
+    const { error: deleteError } = await supabase
+      .schema("axis")
+      .from("domain_subtask_completions")
+      .delete()
+      .eq("domain_id", domain.id)
+      .eq("user_id", userId)
+      .eq("subtask_id", subtask.id)
+      .eq("period_key", periodKey);
+
+    if (deleteError) {
+      return { success: false, error: deleteError.message };
+    }
+  }
+
+  const { data: subtasks, error: subtasksError } = await supabase
+    .schema("axis")
+    .from("domain_subtasks")
+    .select("id")
+    .eq("domain_id", domain.id)
+    .eq("user_id", userId)
+    .order("sort_order", { ascending: true });
+
+  if (subtasksError) {
+    return { success: false, error: subtasksError.message };
+  }
+
+  const subtaskIds = (subtasks ?? []).map((item) => item.id);
+  const { data: completions, error: completionsError } = await supabase
+    .schema("axis")
+    .from("domain_subtask_completions")
+    .select("subtask_id")
+    .eq("domain_id", domain.id)
+    .eq("user_id", userId)
+    .eq("period_key", periodKey)
+    .in("subtask_id", subtaskIds);
+
+  if (completionsError) {
+    return { success: false, error: completionsError.message };
+  }
+
+  const completedSubtaskIds = new Set(
+    (completions ?? []).map((completion) => completion.subtask_id),
+  );
+  const aligned =
+    completed &&
+    subtaskIds.length > 0 &&
+    subtaskIds.every((id) => completedSubtaskIds.has(id));
+  let reset = false;
+
+  if (aligned) {
+    const { error: alignError } = await supabase
+      .schema("axis")
+      .from("domains")
+      .update({
+        status: "ALIGNED",
+        last_passive_alignment_at: completedAt.toISOString(),
+      })
+      .eq("id", domain.id)
+      .eq("user_id", userId);
+
+    if (alignError) {
+      return { success: false, error: alignError.message };
+    }
+
+    if (domain.subtask_reset_mode === "DRIFT_CYCLE") {
+      const { error: resetError } = await supabase
+        .schema("axis")
+        .from("domain_subtask_completions")
+        .delete()
+        .eq("domain_id", domain.id)
+        .eq("user_id", userId)
+        .eq("period_key", periodKey);
+
+      if (resetError) {
+        return { success: false, error: resetError.message };
+      }
+
+      completedSubtaskIds.clear();
+      reset = true;
+    }
+
+    try {
+      const result = await scheduleDomainDriftWarning(domain.id, {
+        source: "subtasks",
+        status: "ALIGNED",
+        lastPassiveAlignmentAt: completedAt,
+      });
+      if (result.reason === "processed-now") {
+        console.info("Drift warning processed immediately after subtask completion", {
+          domainId: domain.id,
+          source: "subtasks",
+        });
+      } else if (!result.scheduled) {
+        console.warn("Drift warning was not scheduled after subtask completion", {
+          domainId: domain.id,
+          source: "subtasks",
+          reason: result.reason,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to schedule drift warning after subtask completion", {
+        domainId: domain.id,
+        source: "subtasks",
+        error,
+      });
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/domain/${domain.slug}`);
+
+  return {
+    success: true,
+    completedSubtaskIds: Array.from(completedSubtaskIds),
+    aligned,
+    reset,
+  };
 }
 
 export async function loadAllCommitments(
