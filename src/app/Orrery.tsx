@@ -476,6 +476,8 @@ export function Orrery({
   const [returnPulseActive, setReturnPulseActive] = useState(false);
   const [returnPulseTargetId, setReturnPulseTargetId] = useState<string | null>(null);
   const showCreateRef = useRef(showCreate);
+  const commandBufferRef = useRef("");
+  const commandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const orbitClockDesktopScrollRef = useRef<HTMLDivElement>(null);
   const orbitClockMobileScrollRef = useRef<HTMLDivElement>(null);
   showCreateRef.current = showCreate;
@@ -992,6 +994,29 @@ export function Orrery({
         return;
       }
 
+      if (/^[a-z]$/i.test(e.key)) {
+        commandBufferRef.current = `${commandBufferRef.current}${e.key.toLowerCase()}`.slice(-7);
+        if (commandTimerRef.current) {
+          clearTimeout(commandTimerRef.current);
+        }
+        commandTimerRef.current = setTimeout(() => {
+          commandBufferRef.current = "";
+          commandTimerRef.current = null;
+        }, 1200);
+
+        if (commandBufferRef.current === "mydaily") {
+          commandBufferRef.current = "";
+          if (commandTimerRef.current) {
+            clearTimeout(commandTimerRef.current);
+            commandTimerRef.current = null;
+          }
+          router.push(isDemo ? "/login" : "/daily");
+          return;
+        }
+      } else if (e.key.length === 1) {
+        commandBufferRef.current = "";
+      }
+
       const key = parseInt(e.key, 10);
       if (key >= 1 && key <= 9) {
         const target = navigable[key - 1];
@@ -1001,7 +1026,13 @@ export function Orrery({
       }
     };
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      if (commandTimerRef.current) {
+        clearTimeout(commandTimerRef.current);
+        commandTimerRef.current = null;
+      }
+    };
   }, [domainUrl, isDemo, navigable, router]);
 
   /* ── Render ──────────────────────────────────────────────── */
@@ -1775,15 +1806,24 @@ export function Orrery({
               Tap planets to enter · Drag to adjust orbit
             </p>
 
-            {alignable.length > 0 && (
+            <div className="flex items-center gap-7 lg:absolute lg:right-0 lg:bottom-0">
+              <Link
+                href={isDemo ? "/login" : "/daily"}
+                className="group cursor-pointer text-[10px] font-mono tracking-[0.35em] uppercase leading-none"
+              >
+                <span className="text-zinc-600 group-hover:text-zinc-400 group-active:text-zinc-400 transition-colors duration-500">Daily</span>
+              </Link>
+
+              {alignable.length > 0 && (
                 <Link
                   href={isDemo ? "/login" : domainUrl(alignable[0].slug, `align=${encodeURIComponent(alignSlugs)}&idx=0`)}
-                  className="group text-[10px] font-mono tracking-[0.35em] uppercase leading-none lg:absolute lg:right-0 lg:bottom-0"
+                  className="group cursor-pointer text-[10px] font-mono tracking-[0.35em] uppercase leading-none"
                 >
                   <span className="text-zinc-600 group-hover:text-zinc-400 group-active:text-zinc-400 transition-colors duration-500">Align </span>
                   <span className="text-zinc-700 group-hover:text-cyan-400 group-active:text-cyan-400 transition-colors duration-500 align-arrow">→</span>
                 </Link>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
