@@ -10,7 +10,12 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { updateOrbit, resetOrbits, createDomain } from "./orrery-actions";
+import {
+  updateOrbit,
+  resetOrbits,
+  createDomain,
+  forceAlignDomains as forceAlignDomainsAction,
+} from "./orrery-actions";
 import { logout } from "@/lib/auth-actions";
 import {
   getEffectiveDriftThresholdMs,
@@ -80,6 +85,12 @@ const RETURN_PULSE_START_DELAY_MS = 240;
 const RETURN_PULSE_DURATION_MS = 4600;
 const RETURN_PULSE_CLEAR_DELAY_MS = 420;
 const RETURN_PULSE_ANIMATION = `${RETURN_PULSE_DURATION_MS / 1000}s cubic-bezier(0.22,1,0.36,1) 1`;
+const BATCH_QUOTE_REVEAL_DELAY_MS = 520;
+const BATCH_QUOTE_HOLD_DELAY_MS = 1600;
+const BATCH_QUOTE_COLLAPSE_DELAY_MS = 4300;
+const BATCH_QUOTE_CLEAR_DELAY_MS = 5050;
+
+type BatchQuotePhase = "burst" | "reveal" | "hold" | "collapse" | "gone";
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const h = hex.replace("#", "");
@@ -341,6 +352,34 @@ function getDomainSortTimestamp(domain: DomainData): number {
   );
 }
 
+function sortDomainsForMetric(
+  domainList: DomainData[],
+  metric: HoverMetric,
+): DomainData[] {
+  return [...domainList].sort((a: DomainData, b: DomainData) => {
+    const order: Record<EffectiveStatus, number> = {
+      ACTIVE: 0,
+      DRIFTING: 1,
+      ARCHIVED: 2,
+    };
+    const statusSort =
+      metric === "TOTAL"
+        ? order[effectiveStatus(a.status)] - order[effectiveStatus(b.status)]
+        : 0;
+    if (statusSort !== 0) return statusSort;
+
+    const recencySort = getDomainSortTimestamp(b) - getDomainSortTimestamp(a);
+    if (recencySort !== 0) return recencySort;
+
+    return a.name.localeCompare(b.name);
+  });
+}
+
+async function getRandomQuote(): Promise<string> {
+  const { QUOTES } = await import("./domain/[slug]/quotes");
+  return QUOTES[Math.floor(Math.random() * QUOTES.length)];
+}
+
 function formatDriftCountdown(remainingMs: number | null): string {
   if (remainingMs === null) return "--h --m --s";
   const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
@@ -467,6 +506,18 @@ export function Orrery({
   const [newDomainName, setNewDomainName] = useState("");
   const [createError, setCreateError] = useState("");
   const [isCreating, startCreateTransition] = useTransition();
+  const [forceAlignOpen, setForceAlignOpen] = useState(false);
+  const [selectedForceDomainIds, setSelectedForceDomainIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [forceAlignError, setForceAlignError] = useState("");
+  const [isForceAligning, startForceAlignTransition] = useTransition();
+  const [batchQuoteOverlay, setBatchQuoteOverlay] = useState(false);
+  const [batchQuotePhase, setBatchQuotePhase] =
+    useState<BatchQuotePhase>("gone");
+  const [batchQuoteText, setBatchQuoteText] = useState("");
+  const [batchQuoteLabel, setBatchQuoteLabel] = useState("");
+  const [batchQuoteColor, setBatchQuoteColor] = useState(DEFAULT_ACTIVE_COLOR);
   const [hoveredMetric, setHoveredMetric] = useState<HoverMetric | null>(null);
   const [selectedMetric, setSelectedMetric] = useState<HoverMetric | null>(null);
   const [hoveredCountdownDomainId, setHoveredCountdownDomainId] = useState<string | null>(null);
@@ -480,6 +531,7 @@ export function Orrery({
   const commandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const orbitClockDesktopScrollRef = useRef<HTMLDivElement>(null);
   const orbitClockMobileScrollRef = useRef<HTMLDivElement>(null);
+  const batchQuoteTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   showCreateRef.current = showCreate;
 
   const normalizedSettings = useMemo(
@@ -943,22 +995,16 @@ export function Orrery({
   const selectedMetricDomains = selectedMetric
     ? domains.filter((domain: DomainData) =>
         matchesHoverMetric(selectedMetric, effectiveStatus(domain.status)),
-      ).sort((a: DomainData, b: DomainData) => {
-        const order: Record<EffectiveStatus, number> = {
-          ACTIVE: 0,
-          DRIFTING: 1,
-          ARCHIVED: 2,
-        };
-        const statusSort =
-          selectedMetric === "TOTAL"
-            ? order[effectiveStatus(a.status)] - order[effectiveStatus(b.status)]
-            : 0;
-        if (statusSort !== 0) return statusSort;
-        const recencySort = getDomainSortTimestamp(b) - getDomainSortTimestamp(a);
-        if (recencySort !== 0) return recencySort;
-        return a.name.localeCompare(b.name);
-      })
+      )
     : [];
+  const sortedSelectedMetricDomains = selectedMetric
+    ? sortDomainsForMetric(selectedMetricDomains, selectedMetric)
+    : [];
+  const forceAlignDomainList = sortDomainsForMetric(domains, "TOTAL");
+  const selectedForceDomains = forceAlignDomainList.filter((domain) =>
+    selectedForceDomainIds.has(domain.id),
+  );
+  const batchQuoteRgb = hexToRgb(batchQuoteColor);
   const countSlotWidthCh = Math.max(
     2,
     ...footerStats.map((stat) => String(stat.count).length),
@@ -967,6 +1013,142 @@ export function Orrery({
   const closeMetricPopup = useCallback(() => {
     setSelectedMetric(null);
   }, []);
+
+  const clearBatchQuoteTimers = useCallback(() => {
+    batchQuoteTimersRef.current.forEach((timer) => clearTimeout(timer));
+    batchQuoteTimersRef.current = [];
+  }, []);
+
+  useEffect(() => clearBatchQuoteTimers, [clearBatchQuoteTimers]);
+
+  const startBatchQuote = useCallback(
+    async (alignedDomains: DomainData[]) => {
+      const firstColor =
+        alignedDomains.find((domain) => domain.color)?.color ??
+        DEFAULT_ACTIVE_COLOR;
+      const alignedCount = alignedDomains.length;
+      const quote = await getRandomQuote();
+
+      clearBatchQuoteTimers();
+      setBatchQuoteColor(firstColor);
+      setBatchQuoteLabel(
+        `${alignedCount} planet${alignedCount === 1 ? "" : "s"} aligned`,
+      );
+      setBatchQuoteText(quote);
+      setBatchQuoteOverlay(true);
+      setBatchQuotePhase("burst");
+
+      batchQuoteTimersRef.current = [
+        setTimeout(() => setBatchQuotePhase("reveal"), BATCH_QUOTE_REVEAL_DELAY_MS),
+        setTimeout(() => setBatchQuotePhase("hold"), BATCH_QUOTE_HOLD_DELAY_MS),
+        setTimeout(
+          () => setBatchQuotePhase("collapse"),
+          BATCH_QUOTE_COLLAPSE_DELAY_MS,
+        ),
+        setTimeout(() => {
+          setBatchQuotePhase("gone");
+          setBatchQuoteOverlay(false);
+          router.refresh();
+        }, BATCH_QUOTE_CLEAR_DELAY_MS),
+      ];
+    },
+    [clearBatchQuoteTimers, router],
+  );
+
+  const openForceAlign = useCallback(() => {
+    if (isDemo) {
+      router.push("/login");
+      return;
+    }
+
+    setSelectedMetric(null);
+    setForceAlignError("");
+    setSelectedForceDomainIds(new Set());
+    setForceAlignOpen(true);
+  }, [isDemo, router]);
+
+  const closeForceAlign = useCallback(() => {
+    if (isForceAligning) return;
+    setForceAlignOpen(false);
+    setForceAlignError("");
+  }, [isForceAligning]);
+
+  const toggleForceDomain = useCallback((domainId: string) => {
+    setForceAlignError("");
+    setSelectedForceDomainIds((current) => {
+      const next = new Set(current);
+      if (next.has(domainId)) {
+        next.delete(domainId);
+      } else {
+        next.add(domainId);
+      }
+      return next;
+    });
+  }, []);
+
+  const selectForcePreset = useCallback(
+    (preset: "DRIFTING" | "ALL" | "CLEAR") => {
+      setForceAlignError("");
+
+      if (preset === "CLEAR") {
+        setSelectedForceDomainIds(new Set());
+        return;
+      }
+
+      const nextIds = forceAlignDomainList
+        .filter(
+          (domain) =>
+            preset === "ALL" ||
+            effectiveStatus(domain.status) === "DRIFTING",
+        )
+        .map((domain) => domain.id);
+
+      setSelectedForceDomainIds(new Set(nextIds));
+    },
+    [forceAlignDomainList],
+  );
+
+  const handleForceAlign = useCallback(() => {
+    const selectedDomains = forceAlignDomainList.filter((domain) =>
+      selectedForceDomainIds.has(domain.id),
+    );
+
+    if (selectedDomains.length === 0) {
+      setForceAlignError("Choose at least one planet.");
+      return;
+    }
+
+    setForceAlignError("");
+    startForceAlignTransition(async () => {
+      const result = await forceAlignDomainsAction(
+        selectedDomains.map((domain) => domain.id),
+        editingDemo ? demoUserId : undefined,
+      );
+
+      if (!result.success) {
+        setForceAlignError(result.error);
+        return;
+      }
+
+      const alignedIdSet = new Set(result.alignedDomainIds);
+      const alignedDomains = selectedDomains.filter((domain) =>
+        alignedIdSet.has(domain.id),
+      );
+
+      setForceAlignOpen(false);
+      setSelectedForceDomainIds(new Set());
+      await startBatchQuote(
+        alignedDomains.length > 0 ? alignedDomains : selectedDomains,
+      );
+    });
+  }, [
+    demoUserId,
+    editingDemo,
+    forceAlignDomainList,
+    selectedForceDomainIds,
+    startBatchQuote,
+    startForceAlignTransition,
+  ]);
 
   useEffect(() => {
     if (!selectedMetric) return;
@@ -980,6 +1162,19 @@ export function Orrery({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [closeMetricPopup, selectedMetric]);
+
+  useEffect(() => {
+    if (!forceAlignOpen) return;
+
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        closeForceAlign();
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [closeForceAlign, forceAlignOpen]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1039,6 +1234,63 @@ export function Orrery({
 
   return (
     <main className="min-h-screen bg-black text-white relative overflow-hidden select-none">
+      {batchQuoteOverlay && (
+        <div
+          className={`batch-align-quote-bg fixed inset-0 z-50 flex items-center justify-center px-7 ${
+            batchQuotePhase === "collapse" ? "batch-align-quote-bg-collapse" : ""
+          }`}
+          style={{ backgroundColor: "rgba(0,0,0,0.97)" }}
+        >
+          <div
+            className="batch-align-quote-orbit absolute rounded-full"
+            style={{
+              borderColor: `rgba(${batchQuoteRgb.r},${batchQuoteRgb.g},${batchQuoteRgb.b},0.45)`,
+              boxShadow: `0 0 28px rgba(${batchQuoteRgb.r},${batchQuoteRgb.g},${batchQuoteRgb.b},0.16), inset 0 0 28px rgba(${batchQuoteRgb.r},${batchQuoteRgb.g},${batchQuoteRgb.b},0.08)`,
+            }}
+          />
+          <div
+            className="batch-align-quote-orbit batch-align-quote-orbit-late absolute rounded-full"
+            style={{
+              borderColor: `rgba(${batchQuoteRgb.r},${batchQuoteRgb.g},${batchQuoteRgb.b},0.22)`,
+            }}
+          />
+          <div
+            className="batch-align-quote-core absolute rounded-full"
+            style={{
+              backgroundColor: batchQuoteColor,
+              boxShadow: `0 0 26px rgba(${batchQuoteRgb.r},${batchQuoteRgb.g},${batchQuoteRgb.b},0.72), 0 0 80px rgba(${batchQuoteRgb.r},${batchQuoteRgb.g},${batchQuoteRgb.b},0.22)`,
+            }}
+          />
+
+          <div
+            className={`relative z-10 flex max-w-2xl flex-col items-center text-center transition-all duration-700 ${
+              batchQuotePhase === "reveal" || batchQuotePhase === "hold"
+                ? "translate-y-0 opacity-100 blur-0"
+                : batchQuotePhase === "collapse"
+                  ? "scale-95 opacity-0 blur-sm"
+                  : "translate-y-3 opacity-0 blur-sm"
+            }`}
+          >
+            <p
+              className="mb-6 font-mono text-[9px] uppercase tracking-[0.42em]"
+              style={{
+                color: `rgba(${batchQuoteRgb.r},${batchQuoteRgb.g},${batchQuoteRgb.b},0.58)`,
+              }}
+            >
+              {batchQuoteLabel}
+            </p>
+            <p
+              className="text-lg italic leading-relaxed text-zinc-100 sm:text-2xl md:text-3xl"
+              style={{
+                fontFamily: "var(--font-playfair), Georgia, serif",
+                textShadow: `0 0 44px rgba(${batchQuoteRgb.r},${batchQuoteRgb.g},${batchQuoteRgb.b},0.15)`,
+              }}
+            >
+              {batchQuoteText}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Stars ──────────────────────────────────────────── */}
       <div className="fixed inset-0 pointer-events-none" aria-hidden>
@@ -1814,6 +2066,18 @@ export function Orrery({
                 <span className="text-zinc-600 group-hover:text-zinc-400 group-active:text-zinc-400 transition-colors duration-500">Daily</span>
               </Link>
 
+              {domains.length > 0 && (
+                <button
+                  type="button"
+                  onClick={openForceAlign}
+                  className="group cursor-pointer bg-transparent text-[10px] font-mono uppercase tracking-[0.35em] leading-none"
+                >
+                  <span className="text-zinc-600 transition-colors duration-500 group-hover:text-zinc-400 group-active:text-zinc-400">
+                    Align many
+                  </span>
+                </button>
+              )}
+
               {alignable.length > 0 && (
                 <Link
                   href={isDemo ? "/login" : domainUrl(alignable[0].slug, `align=${encodeURIComponent(alignSlugs)}&idx=0`)}
@@ -1877,8 +2141,8 @@ export function Orrery({
             </div>
 
             <div className="max-h-[72vh] overflow-y-auto px-2 py-2 sm:max-h-[58vh]">
-              {selectedMetricDomains.length > 0 ? (
-                selectedMetricDomains.map((domain: DomainData) => {
+              {sortedSelectedMetricDomains.length > 0 ? (
+                sortedSelectedMetricDomains.map((domain: DomainData) => {
                   const es = effectiveStatus(domain.status);
                   const cfg = getDomainCfg(domain);
                   const href = isDemo ? "/login" : domainUrl(domain.slug);
@@ -1917,6 +2181,166 @@ export function Orrery({
                   No planets in this group
                 </p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Force align modal */}
+      {forceAlignOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="force-align-title"
+          className="fixed inset-0 z-40 flex items-center justify-center px-5 py-8"
+          style={{
+            backgroundColor: "rgba(0,0,0,0.62)",
+            backdropFilter: "blur(8px)",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeForceAlign();
+          }}
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-lg"
+            style={{
+              backgroundColor: "rgba(8,8,10,0.97)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              boxShadow:
+                "0 18px 70px rgba(0,0,0,0.74), 0 0 1px rgba(255,255,255,0.08)",
+            }}
+          >
+            <div className="flex items-start justify-between gap-5 border-b border-white/[0.04] px-6 py-5">
+              <div>
+                <p className="font-mono text-[9px] uppercase tracking-[0.35em] text-zinc-600">
+                  {selectedForceDomains.length} selected
+                </p>
+                <h2
+                  id="force-align-title"
+                  className="mt-2 text-2xl font-light tracking-tight text-zinc-100"
+                  style={{
+                    fontFamily: "var(--font-playfair), Georgia, serif",
+                  }}
+                >
+                  Align many
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeForceAlign}
+                disabled={isForceAligning}
+                className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.28em] text-zinc-600 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-b border-white/[0.04] px-6 py-3">
+              <button
+                type="button"
+                onClick={() => selectForcePreset("DRIFTING")}
+                disabled={isForceAligning}
+                className="cursor-pointer font-mono text-[8px] uppercase tracking-[0.28em] text-zinc-600 transition-colors hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Drifting
+              </button>
+              <button
+                type="button"
+                onClick={() => selectForcePreset("ALL")}
+                disabled={isForceAligning}
+                className="cursor-pointer font-mono text-[8px] uppercase tracking-[0.28em] text-zinc-600 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => selectForcePreset("CLEAR")}
+                disabled={isForceAligning}
+                className="cursor-pointer font-mono text-[8px] uppercase tracking-[0.28em] text-zinc-600 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Clear
+              </button>
+            </div>
+
+            <div className="max-h-[58vh] overflow-y-auto px-2 py-2">
+              {forceAlignDomainList.map((domain: DomainData) => {
+                const es = effectiveStatus(domain.status);
+                const cfg = getDomainCfg(domain);
+                const checked = selectedForceDomainIds.has(domain.id);
+                return (
+                  <button
+                    key={domain.id}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={checked}
+                    disabled={isForceAligning}
+                    onClick={() => toggleForceDomain(domain.id)}
+                    className="group flex w-full cursor-pointer items-center justify-between gap-4 rounded-md px-4 py-3 text-left transition-colors hover:bg-white/[0.035] disabled:cursor-not-allowed disabled:opacity-55"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{
+                          backgroundColor: cfg.color,
+                          boxShadow: cfg.glowSoft,
+                          opacity: es === "ARCHIVED" ? 0.55 : 1,
+                        }}
+                      />
+                      <span
+                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-all"
+                        style={{
+                          borderColor: checked
+                            ? `${cfg.color}88`
+                            : "rgba(255,255,255,0.1)",
+                          backgroundColor: checked
+                            ? `${cfg.color}1f`
+                            : "transparent",
+                          boxShadow: checked
+                            ? `0 0 16px ${cfg.color}24`
+                            : "none",
+                        }}
+                      >
+                        {checked ? (
+                          <span
+                            className="h-1.5 w-1.5 rounded-full"
+                            style={{ backgroundColor: cfg.color }}
+                          />
+                        ) : null}
+                      </span>
+                      <span className="truncate text-sm tracking-wide text-zinc-300 transition-colors group-hover:text-zinc-100">
+                        {domain.name}
+                      </span>
+                    </div>
+                    <span className="shrink-0 font-mono text-[8px] uppercase tracking-[0.24em] text-zinc-700 transition-colors group-hover:text-zinc-500">
+                      {es === "ACTIVE"
+                        ? "Orbit"
+                        : es === "DRIFTING"
+                          ? "Drift"
+                          : "Archive"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="border-t border-white/[0.04] px-6 py-5">
+              {forceAlignError ? (
+                <p className="mb-4 text-center text-xs font-mono text-red-400/80">
+                  {forceAlignError}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleForceAlign}
+                disabled={isForceAligning || selectedForceDomains.length === 0}
+                className="mx-auto block cursor-pointer bg-transparent font-mono text-[10px] uppercase tracking-[0.36em] text-zinc-500 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                {isForceAligning
+                  ? "Aligning..."
+                  : selectedForceDomains.length === 0
+                    ? "Select planets"
+                    : `Align ${selectedForceDomains.length}`}
+              </button>
             </div>
           </div>
         </div>

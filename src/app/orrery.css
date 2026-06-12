@@ -123,6 +123,57 @@
   animation: archive-fade 4s ease-in-out infinite;
 }
 
+@keyframes batch-align-quote-bg-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes batch-align-quote-bg-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes batch-align-quote-orbit-expand {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.08); }
+  18% { opacity: 0.82; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(2.8); }
+}
+
+@keyframes batch-align-quote-core-pop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.2); }
+  36% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+  100% { opacity: 0.38; transform: translate(-50%, -50%) scale(0.92); }
+}
+
+.batch-align-quote-bg {
+  animation: batch-align-quote-bg-in 0.38s ease-out forwards;
+}
+
+.batch-align-quote-bg-collapse {
+  animation: batch-align-quote-bg-out 0.62s ease-in forwards;
+}
+
+.batch-align-quote-orbit {
+  left: 50%;
+  top: 50%;
+  width: 180px;
+  height: 180px;
+  border: 1px solid;
+  animation: batch-align-quote-orbit-expand 1.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.batch-align-quote-orbit-late {
+  animation-delay: 0.16s;
+}
+
+.batch-align-quote-core {
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  animation: batch-align-quote-core-pop 0.9s ease-out forwards;
+}
+
 /* Asteroid: slightly irregular shape */
 .asteroid-shape {
   border-radius: 42% 58% 55% 45% / 50% 42% 58% 50%;

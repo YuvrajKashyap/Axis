@@ -1,5 +1,6 @@
 "use server";
 
+import { scheduleDomainDriftWarning } from "@/lib/drift-warning";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getAuthorizedTargetUserId } from "@/lib/target-user";
 import { revalidatePath } from "next/cache";
@@ -8,6 +9,18 @@ type OrbitUpdate = {
   id: string;
   radius: number;
 };
+
+type ForceAlignDomainRow = {
+  id: string;
+  slug: string;
+  commitment_requirement: "STANDARD" | "PASSIVE_ALIGNMENT" | "SUBTASKS" | null;
+};
+
+type ForceAlignDomainsResult =
+  | { success: true; alignedDomainIds: string[] }
+  | { success: false; error: string };
+
+const FORCE_ALIGNMENT_COMMITMENT_TEXT = "Forced alignment.";
 
 export async function updateOrbit(
   domainId: string,
@@ -62,6 +75,132 @@ export async function resetOrbits(
     ),
   );
   revalidatePath("/");
+}
+
+export async function forceAlignDomains(
+  domainIds: string[],
+  targetUserId?: string,
+): Promise<ForceAlignDomainsResult> {
+  const userId = await getAuthorizedTargetUserId(targetUserId);
+  if (!userId) {
+    return { success: false, error: "Not signed in." };
+  }
+
+  const uniqueDomainIds = Array.from(
+    new Set(domainIds.map((id) => id.trim()).filter(Boolean)),
+  );
+
+  if (uniqueDomainIds.length === 0) {
+    return { success: false, error: "Choose at least one planet." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error: loadError } = await supabase
+    .schema("axis")
+    .from("domains")
+    .select("id,slug,commitment_requirement")
+    .eq("user_id", userId)
+    .in("id", uniqueDomainIds);
+
+  if (loadError) {
+    return { success: false, error: loadError.message };
+  }
+
+  const domains = (data ?? []) as ForceAlignDomainRow[];
+  if (domains.length === 0) {
+    return { success: false, error: "No matching planets found." };
+  }
+
+  const alignedAt = new Date();
+  const alignedAtIso = alignedAt.toISOString();
+  const standardDomains = domains.filter(
+    (domain) => (domain.commitment_requirement ?? "STANDARD") === "STANDARD",
+  );
+  const passiveLikeDomains = domains.filter(
+    (domain) => (domain.commitment_requirement ?? "STANDARD") !== "STANDARD",
+  );
+
+  if (standardDomains.length > 0) {
+    const { error: insertError } = await supabase
+      .schema("axis")
+      .from("commitments")
+      .insert(
+        standardDomains.map((domain) => ({
+          domain_id: domain.id,
+          user_id: userId,
+          text: FORCE_ALIGNMENT_COMMITMENT_TEXT,
+        })),
+      );
+
+    if (insertError) {
+      return { success: false, error: insertError.message };
+    }
+
+    const { error: updateError } = await supabase
+      .schema("axis")
+      .from("domains")
+      .update({ status: "ALIGNED" })
+      .eq("user_id", userId)
+      .in(
+        "id",
+        standardDomains.map((domain) => domain.id),
+      );
+
+    if (updateError) {
+      return { success: false, error: updateError.message };
+    }
+  }
+
+  if (passiveLikeDomains.length > 0) {
+    const { error: updateError } = await supabase
+      .schema("axis")
+      .from("domains")
+      .update({
+        status: "ALIGNED",
+        last_passive_alignment_at: alignedAtIso,
+      })
+      .eq("user_id", userId)
+      .in(
+        "id",
+        passiveLikeDomains.map((domain) => domain.id),
+      );
+
+    if (updateError) {
+      return { success: false, error: updateError.message };
+    }
+  }
+
+  await Promise.all(
+    domains.map(async (domain) => {
+      try {
+        const isStandard =
+          (domain.commitment_requirement ?? "STANDARD") === "STANDARD";
+        await scheduleDomainDriftWarning(domain.id, {
+          source: isStandard ? "commitment" : "passive-alignment",
+          status: "ALIGNED",
+          ...(isStandard
+            ? {
+                lastCommitmentAt: alignedAt,
+                lastCommitmentText: FORCE_ALIGNMENT_COMMITMENT_TEXT,
+              }
+            : { lastPassiveAlignmentAt: alignedAt }),
+        });
+      } catch (error) {
+        console.error("Failed to schedule drift warning after force align", {
+          domainId: domain.id,
+          error,
+        });
+      }
+    }),
+  );
+
+  revalidatePath("/");
+  domains.forEach((domain) => revalidatePath(`/domain/${domain.slug}`));
+
+  return {
+    success: true,
+    alignedDomainIds: domains.map((domain) => domain.id),
+  };
 }
 
 export async function createDomain(name: string, overrideUserId?: string): Promise<{ success: boolean; error?: string; slug?: string }> {
