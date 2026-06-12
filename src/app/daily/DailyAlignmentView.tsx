@@ -12,12 +12,12 @@ import {
   DAILY_WEEKDAYS,
   type DailyChecklistItem,
   type DailyCompletion,
-  type DailyCopyMode,
+  type DailyRoutine,
+  type DailyRoutineBlock,
   type DailySettings,
   type DailyWeekdayValue,
 } from "@/lib/daily-alignment";
 import {
-  copyDailyItems,
   createDailyItem,
   deleteDailyItem,
   loadDailyCompletions,
@@ -26,6 +26,7 @@ import {
   setDailyCompletion,
   updateDailyItemLabel,
 } from "./actions";
+import { DailyRoutinesPanel } from "./DailyRoutinesPanel";
 
 type WeekCalendar = {
   todayWeekday: DailyWeekdayValue;
@@ -105,12 +106,6 @@ function getServerWeekCalendarSnapshot() {
   return null;
 }
 
-function getDefaultCopySourceWeekday(
-  weekday: DailyWeekdayValue,
-): DailyWeekdayValue {
-  return weekday === 1 ? 2 : ((weekday - 1) as DailyWeekdayValue);
-}
-
 function sortItems(items: DailyChecklistItem[]) {
   return [...items].sort(
     (a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label),
@@ -148,14 +143,23 @@ function CheckIcon() {
 
 export function DailyAlignmentView({
   items: initialItems,
+  routines: initialRoutines,
+  routineBlocks: initialRoutineBlocks,
   settings: initialSettings,
 }: {
   items: DailyChecklistItem[];
+  routines: DailyRoutine[];
+  routineBlocks: DailyRoutineBlock[];
   settings: DailySettings;
 }) {
   const [items, setItems] = useState(() => sortItems(initialItems));
+  const [routines, setRoutines] = useState(initialRoutines);
+  const [routineBlocks, setRoutineBlocks] = useState(initialRoutineBlocks);
   const [moveCheckedToBottom, setMoveCheckedToBottom] = useState(
     initialSettings.moveCheckedToBottom,
+  );
+  const [activeMode, setActiveMode] = useState<"checklist" | "routines">(
+    "checklist",
   );
   const calendar = useSyncExternalStore(
     subscribeToWeekCalendar,
@@ -168,8 +172,6 @@ export function DailyAlignmentView({
     {},
   );
   const [newItemText, setNewItemText] = useState("");
-  const [copySourceWeekdayOverride, setCopySourceWeekdayOverride] =
-    useState<DailyWeekdayValue | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -193,8 +195,6 @@ export function DailyAlignmentView({
 
   const activeWeekday =
     activeWeekdayOverride ?? calendar?.todayWeekday ?? DAILY_WEEKDAYS[0].value;
-  const copySourceWeekday =
-    copySourceWeekdayOverride ?? getDefaultCopySourceWeekday(activeWeekday);
   const activeDateKey = calendar?.datesByWeekday[activeWeekday] ?? "";
   const activeDateLabel = calendar?.labelsByWeekday[activeWeekday] ?? "";
   const activeDay = DAILY_WEEKDAYS.find((day) => day.value === activeWeekday)!;
@@ -203,27 +203,22 @@ export function DailyAlignmentView({
     [activeDateKey, completedByDate],
   );
 
-  const itemsForActiveDay = useMemo(() => {
-    const dayItems = sortItems(
-      items.filter((item) => item.weekday === activeWeekday),
-    );
+  const itemsForActiveDate = useMemo(() => {
+    const focusItems = sortItems(items);
 
-    if (!moveCheckedToBottom) return dayItems;
+    if (!moveCheckedToBottom) return focusItems;
 
-    return dayItems.sort((a, b) => {
+    return focusItems.sort((a, b) => {
       const aDone = activeCompletedIds.includes(a.id);
       const bDone = activeCompletedIds.includes(b.id);
       if (aDone === bDone) return a.sortOrder - b.sortOrder;
       return aDone ? 1 : -1;
     });
-  }, [activeCompletedIds, activeWeekday, items, moveCheckedToBottom]);
+  }, [activeCompletedIds, items, moveCheckedToBottom]);
 
-  const rawItemsForActiveDay = useMemo(
-    () => sortItems(items.filter((item) => item.weekday === activeWeekday)),
-    [activeWeekday, items],
-  );
+  const rawFocusItems = useMemo(() => sortItems(items), [items]);
 
-  const completedCount = rawItemsForActiveDay.filter((item) =>
+  const completedCount = rawFocusItems.filter((item) =>
     activeCompletedIds.includes(item.id),
   ).length;
 
@@ -239,16 +234,8 @@ export function DailyAlignmentView({
     }));
   }
 
-  function replaceItemsForWeekday(
-    weekday: DailyWeekdayValue,
-    nextItems: DailyChecklistItem[],
-  ) {
-    setItems((current) =>
-      sortItems([
-        ...current.filter((item) => item.weekday !== weekday),
-        ...nextItems,
-      ]),
-    );
+  function replaceFocusItems(nextItems: DailyChecklistItem[]) {
+    setItems(sortItems(nextItems));
   }
 
   function patchItem(nextItem: DailyChecklistItem) {
@@ -264,7 +251,7 @@ export function DailyAlignmentView({
     if (!label) return;
     clearMessages();
     startTransition(async () => {
-      const result = await createDailyItem(activeWeekday, label);
+      const result = await createDailyItem(label);
       if (!result.success) {
         setError(result.error);
         return;
@@ -318,31 +305,32 @@ export function DailyAlignmentView({
   }
 
   function handleMoveItem(item: DailyChecklistItem, direction: -1 | 1) {
-    const dayItems = rawItemsForActiveDay;
-    const currentIndex = dayItems.findIndex((dayItem) => dayItem.id === item.id);
+    const focusItems = rawFocusItems;
+    const currentIndex = focusItems.findIndex(
+      (focusItem) => focusItem.id === item.id,
+    );
     const nextIndex = currentIndex + direction;
-    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= dayItems.length) {
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= focusItems.length) {
       return;
     }
 
-    const reordered = [...dayItems];
+    const reordered = [...focusItems];
     const [moved] = reordered.splice(currentIndex, 1);
     reordered.splice(nextIndex, 0, moved);
-    const nextItems = reordered.map((dayItem, index) => ({
-      ...dayItem,
+    const nextItems = reordered.map((focusItem, index) => ({
+      ...focusItem,
       sortOrder: index,
     }));
 
-    replaceItemsForWeekday(activeWeekday, nextItems);
+    replaceFocusItems(nextItems);
     clearMessages();
     startTransition(async () => {
       const result = await reorderDailyItems(
-        activeWeekday,
-        nextItems.map((dayItem) => dayItem.id),
+        nextItems.map((focusItem) => focusItem.id),
       );
       if (!result.success) {
         setError(result.error);
-        replaceItemsForWeekday(activeWeekday, dayItems);
+        replaceFocusItems(focusItems);
       }
     });
   }
@@ -383,40 +371,6 @@ export function DailyAlignmentView({
     });
   }
 
-  function handleCopy(mode: DailyCopyMode) {
-    if (copySourceWeekday === activeWeekday) return;
-    clearMessages();
-    startTransition(async () => {
-      const result = await copyDailyItems(
-        copySourceWeekday,
-        activeWeekday,
-        mode,
-      );
-      if (!result.success) {
-        setError(result.error);
-        return;
-      }
-
-      if (mode === "replace") {
-        replaceItemsForWeekday(activeWeekday, result.items);
-        if (activeDateKey) {
-          setCompletionsForDate(activeDateKey, []);
-        }
-      } else {
-        setItems((current) => sortItems([...current, ...result.items]));
-      }
-
-      const source = DAILY_WEEKDAYS.find(
-        (day) => day.value === copySourceWeekday,
-      )?.label;
-      setNotice(
-        mode === "replace"
-          ? `Replaced ${activeDay.label} with ${source}.`
-          : `Added ${source} to ${activeDay.label}.`,
-      );
-    });
-  }
-
   return (
     <main className="min-h-screen bg-black pb-16 text-white">
       <header className="border-b border-white/[0.04] bg-black/70">
@@ -439,7 +393,55 @@ export function DailyAlignmentView({
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-6xl gap-8 px-5 pt-8 sm:px-8 md:grid-cols-[minmax(0,1fr)_18rem] md:px-10 md:pt-12">
+      <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-8 md:px-10 md:pt-12">
+        <div className="mb-7 grid grid-cols-2 border-y border-white/[0.04] py-3 sm:flex">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveMode("checklist");
+              clearMessages();
+            }}
+            className={`min-h-11 cursor-pointer px-3 py-2 text-center text-[10px] font-mono uppercase tracking-[0.2em] transition-colors sm:px-4 sm:text-left sm:tracking-[0.28em] ${
+              activeMode === "checklist"
+                ? "text-zinc-100"
+                : "text-zinc-700 hover:text-zinc-400"
+            }`}
+          >
+            Focus List
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveMode("routines");
+              clearMessages();
+            }}
+            className={`min-h-11 cursor-pointer border-l border-white/[0.06] px-3 py-2 text-center text-[10px] font-mono uppercase tracking-[0.2em] transition-colors sm:px-4 sm:text-left sm:tracking-[0.28em] ${
+              activeMode === "routines"
+                ? "text-cyan-300/85"
+                : "text-zinc-700 hover:text-zinc-400"
+            }`}
+          >
+            Routines
+          </button>
+        </div>
+      </div>
+
+      {activeMode === "routines" ? (
+        <div className="mx-auto max-w-6xl px-4 sm:px-8 md:px-10">
+          <DailyRoutinesPanel
+            items={items}
+            routines={routines}
+            setRoutines={setRoutines}
+            routineBlocks={routineBlocks}
+            setRoutineBlocks={setRoutineBlocks}
+            activeDateKey={activeDateKey}
+            isActiveDateToday={activeDateKey === calendar?.todayDateKey}
+            activeCompletedIds={activeCompletedIds}
+            onToggleCompletion={handleToggleCompletion}
+          />
+        </div>
+      ) : (
+      <div className="mx-auto grid max-w-6xl gap-8 px-5 sm:px-8 md:grid-cols-[minmax(0,1fr)_18rem] md:px-10">
         <section className="min-w-0">
           <div className="mb-8">
             <p className="mb-3 text-[10px] font-mono uppercase tracking-[0.42em] text-zinc-600">
@@ -461,9 +463,9 @@ export function DailyAlignmentView({
                     : "Loading local week"}
                 </p>
               </div>
-              {rawItemsForActiveDay.length > 0 ? (
+              {rawFocusItems.length > 0 ? (
                 <p className="font-mono text-[10px] uppercase tracking-[0.26em] text-zinc-600">
-                  {completedCount} / {rawItemsForActiveDay.length}
+                  {completedCount} / {rawFocusItems.length}
                 </p>
               ) : null}
             </div>
@@ -506,11 +508,11 @@ export function DailyAlignmentView({
           </div>
 
           <div className="space-y-2">
-            {itemsForActiveDay.length > 0 ? (
-              itemsForActiveDay.map((item) => {
+            {itemsForActiveDate.length > 0 ? (
+              itemsForActiveDate.map((item) => {
                 const completed = activeCompletedIds.includes(item.id);
-                const realIndex = rawItemsForActiveDay.findIndex(
-                  (dayItem) => dayItem.id === item.id,
+                const realIndex = rawFocusItems.findIndex(
+                  (focusItem) => focusItem.id === item.id,
                 );
                 return (
                   <div
@@ -531,7 +533,7 @@ export function DailyAlignmentView({
                         type="button"
                         aria-label={`Move ${item.label} down`}
                         disabled={
-                          isPending || realIndex >= rawItemsForActiveDay.length - 1
+                          isPending || realIndex >= rawFocusItems.length - 1
                         }
                         onClick={() => handleMoveItem(item, 1)}
                         className="h-6 w-5 cursor-pointer text-[11px] font-mono text-zinc-700 transition-colors hover:text-zinc-400 disabled:cursor-not-allowed disabled:opacity-20"
@@ -600,7 +602,7 @@ export function DailyAlignmentView({
             ) : (
               <div className="border-y border-white/[0.04] py-12 text-center">
                 <p className="text-sm text-zinc-500">
-                  No items for {activeDay.label}.
+                  No focus items yet.
                 </p>
               </div>
             )}
@@ -615,7 +617,7 @@ export function DailyAlignmentView({
                   handleAddItem();
                 }
               }}
-              placeholder={`Add to ${activeDay.label}`}
+              placeholder="Add focus item"
               className="min-w-0 flex-1 rounded-md border border-white/[0.06] bg-white/[0.018] px-4 py-3 text-sm text-zinc-200 outline-none transition-colors placeholder:text-zinc-700 focus:border-white/15"
             />
             <button
@@ -675,51 +677,9 @@ export function DailyAlignmentView({
               </span>
             </button>
           </section>
-
-          <section className="border-y border-white/[0.04] py-5">
-            <p className="mb-4 text-[10px] font-mono uppercase tracking-[0.36em] text-zinc-600">
-              Copy
-            </p>
-            <label className="mb-2 block text-[9px] font-mono uppercase tracking-[0.24em] text-zinc-700">
-              From
-            </label>
-            <select
-              value={copySourceWeekday}
-              onChange={(event) =>
-                setCopySourceWeekdayOverride(
-                  Number(event.target.value) as DailyWeekdayValue,
-                )
-              }
-              className="w-full cursor-pointer rounded-md border border-white/[0.06] bg-zinc-950 px-3 py-2 text-[11px] font-mono text-zinc-300 outline-none transition-colors hover:border-white/12 focus:border-white/12"
-            >
-              {DAILY_WEEKDAYS.map((weekday) => (
-                <option key={weekday.value} value={weekday.value}>
-                  {weekday.label}
-                </option>
-              ))}
-            </select>
-
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleCopy("add")}
-                disabled={isPending || copySourceWeekday === activeWeekday}
-                className="cursor-pointer rounded-md border border-white/[0.06] px-3 py-2 text-[9px] font-mono uppercase tracking-[0.24em] text-zinc-500 transition-colors hover:border-white/12 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                Add
-              </button>
-              <button
-                type="button"
-                onClick={() => handleCopy("replace")}
-                disabled={isPending || copySourceWeekday === activeWeekday}
-                className="cursor-pointer rounded-md border border-white/[0.06] px-3 py-2 text-[9px] font-mono uppercase tracking-[0.24em] text-zinc-500 transition-colors hover:border-white/12 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                Replace
-              </button>
-            </div>
-          </section>
         </aside>
       </div>
+      )}
     </main>
   );
 }
