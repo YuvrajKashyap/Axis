@@ -64,6 +64,7 @@ const COMPARE_BOTTOM_GUTTER_PX = 20;
 const COMPARE_RAIL_WIDTH_PX = 56;
 const COMPARE_BLOCK_LEFT_PX = COMPARE_RAIL_WIDTH_PX + 10;
 const COMPARE_HOUR_MARKS = [0, 360, 720, 1080, 1440];
+const MOBILE_SUBTASK_SHEET_MEDIA = "(max-width: 1279px)";
 
 type BlockColorStyle = {
   accent: string;
@@ -145,6 +146,13 @@ type ColorPickerProps = {
   disabled?: boolean;
 };
 
+type SubtaskTitleFieldProps = {
+  value: string;
+  completed: boolean;
+  className?: string;
+  onSave: (value: string, field: HTMLTextAreaElement) => void;
+};
+
 function ColorPicker({ value, onChange, disabled = false }: ColorPickerProps) {
   const normalizedColor = normalizeDailyRoutineBlockColor(value);
   const style = getBlockColorStyle(normalizedColor);
@@ -194,6 +202,39 @@ function ColorPicker({ value, onChange, disabled = false }: ColorPickerProps) {
         }}
       />
     </label>
+  );
+}
+
+function SubtaskTitleField({
+  value,
+  completed,
+  className = "",
+  onSave,
+}: SubtaskTitleFieldProps) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function resizeTextarea() {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }
+
+  useEffect(() => {
+    resizeTextarea();
+  }, [value]);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      defaultValue={value}
+      rows={1}
+      onInput={resizeTextarea}
+      onBlur={(event) => onSave(event.currentTarget.value, event.currentTarget)}
+      className={`min-w-0 resize-none overflow-hidden whitespace-pre-wrap break-words rounded-sm border border-transparent bg-transparent outline-none transition-colors [overflow-wrap:anywhere] hover:border-white/[0.12] hover:bg-white/[0.035] focus:border-cyan-200/35 focus:bg-white/[0.045] ${
+        completed ? "text-zinc-500 line-through" : "text-zinc-100"
+      } ${className}`}
+    />
   );
 }
 
@@ -928,6 +969,9 @@ export function DailyRoutinesPanel({
   const [compareMode, setCompareMode] = useState(false);
   const [selectedRoutineId, setSelectedRoutineId] = useState<string | null>(null);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [mobileSubtaskBlockId, setMobileSubtaskBlockId] = useState<string | null>(
+    null,
+  );
   const [routinePendingDeleteId, setRoutinePendingDeleteId] = useState<
     string | null
   >(null);
@@ -954,6 +998,8 @@ export function DailyRoutinesPanel({
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const routineBlocksRef = useRef(routineBlocks);
+  const blockDragMovedRef = useRef(false);
+  const suppressNextBlockClickRef = useRef(false);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const timelineCanvasRef = useRef<HTMLDivElement | null>(null);
 
@@ -978,6 +1024,18 @@ export function DailyRoutinesPanel({
   const newSubtaskTitle = activeBlock
     ? (newSubtaskDrafts[activeBlock.blockKey] ?? "")
     : "";
+  const mobileSubtaskBlock = mobileSubtaskBlockId
+    ? (blocksForActiveRoutine.find((block) => block.id === mobileSubtaskBlockId) ??
+      null)
+    : null;
+  const mobileSubtaskTitle = mobileSubtaskBlock
+    ? (newSubtaskDrafts[mobileSubtaskBlock.blockKey] ?? "")
+    : "";
+  const mobileSubtaskCompletedCount = mobileSubtaskBlock
+    ? mobileSubtaskBlock.subtasks.filter((subtask) =>
+        completedSubtaskIds.includes(subtask.id),
+      ).length
+    : 0;
   const presetItems = useMemo(
     () => sortItemsForPresets(items),
     [items],
@@ -1008,6 +1066,25 @@ export function DailyRoutinesPanel({
       cancelled = true;
     };
   }, [activeDateKey]);
+
+  useEffect(() => {
+    if (!mobileSubtaskBlock) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMobileSubtaskBlockId(null);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobileSubtaskBlock]);
 
   useEffect(() => {
     if (!activeDateKey) return;
@@ -1141,7 +1218,27 @@ export function DailyRoutinesPanel({
 
   function handleFocusComparedRoutine(routineId: string) {
     setCompareMode(false);
+    setMobileSubtaskBlockId(null);
     handleSelectRoutine(routineId);
+  }
+
+  function openMobileSubtasks(blockId: string) {
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia(MOBILE_SUBTASK_SHEET_MEDIA).matches
+    ) {
+      setMobileSubtaskBlockId(blockId);
+    }
+  }
+
+  function handleSelectBlock(block: DailyRoutineBlock) {
+    setSelectedBlockId(block.id);
+    if (blockDragMovedRef.current || suppressNextBlockClickRef.current) {
+      blockDragMovedRef.current = false;
+      suppressNextBlockClickRef.current = false;
+      return;
+    }
+    openMobileSubtasks(block.id);
   }
 
   function handleCycleRoutine(direction: -1 | 1) {
@@ -1459,7 +1556,7 @@ export function DailyRoutinesPanel({
     block: DailyRoutineBlock,
     subtask: DailyRoutineBlockSubtask,
     title: string,
-    input: HTMLInputElement,
+    input: HTMLInputElement | HTMLTextAreaElement,
   ) {
     const normalizedTitle = title.trim().replace(/\s+/g, " ").slice(0, 140);
     if (!normalizedTitle) {
@@ -1700,6 +1797,9 @@ export function DailyRoutinesPanel({
     mode: DragMode,
   ) {
     event.preventDefault();
+    event.stopPropagation();
+    blockDragMovedRef.current = false;
+    suppressNextBlockClickRef.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
     const pointerMinute = getTimelineMinuteFromClientY(event.clientY);
     setSelectedBlockId(block.id);
@@ -1736,6 +1836,9 @@ export function DailyRoutinesPanel({
       nextEnd = Math.min(1440, Math.max(nextEnd, drag.startMinute + MIN_BLOCK_MINUTES));
     }
 
+    if (nextStart !== drag.startMinute || nextEnd !== drag.endMinute) {
+      blockDragMovedRef.current = true;
+    }
     patchBlockTimes(drag.blockId, nextStart, nextEnd);
   }
 
@@ -1744,8 +1847,19 @@ export function DailyRoutinesPanel({
     const draggedBlock = routineBlocksRef.current.find(
       (block) => block.id === drag.blockId,
     );
+    const didMove = blockDragMovedRef.current;
+    const shouldOpenMobileSubtasks = drag.mode === "move" && !didMove;
+    suppressNextBlockClickRef.current = didMove || shouldOpenMobileSubtasks;
+    blockDragMovedRef.current = false;
     setDrag(null);
     if (!draggedBlock) return;
+    if (shouldOpenMobileSubtasks) {
+      openMobileSubtasks(draggedBlock.id);
+      return;
+    }
+    if (!didMove) {
+      return;
+    }
 
     handleSaveBlock(
       draggedBlock,
@@ -1753,6 +1867,16 @@ export function DailyRoutinesPanel({
       draggedBlock.startMinute,
       draggedBlock.endMinute,
     );
+  }
+
+  function handleBlockPointerMove(event: PointerEvent<HTMLElement>) {
+    event.stopPropagation();
+    updateDrag(event.clientY);
+  }
+
+  function handleBlockPointerEnd(event: PointerEvent<HTMLElement>) {
+    event.stopPropagation();
+    finishDrag();
   }
 
   function handlePresetDragStart(
@@ -2128,18 +2252,18 @@ export function DailyRoutinesPanel({
                         type="button"
                         aria-label={`Resize start of ${block.title}`}
                         onPointerDown={(event) => startDrag(event, block, "start")}
-                        onPointerMove={(event) => updateDrag(event.clientY)}
-                        onPointerUp={finishDrag}
-                        onPointerCancel={finishDrag}
+                        onPointerMove={handleBlockPointerMove}
+                        onPointerUp={handleBlockPointerEnd}
+                        onPointerCancel={handleBlockPointerEnd}
                         className={`absolute inset-x-0 top-0 z-20 touch-none cursor-ns-resize bg-transparent transition-colors hover:bg-white/15 ${resizeHandleClass}`}
                       />
                       <button
                         type="button"
                         onPointerDown={(event) => startDrag(event, block, "move")}
-                        onPointerMove={(event) => updateDrag(event.clientY)}
-                        onPointerUp={finishDrag}
-                        onPointerCancel={finishDrag}
-                        onClick={() => setSelectedBlockId(block.id)}
+                        onPointerMove={handleBlockPointerMove}
+                        onPointerUp={handleBlockPointerEnd}
+                        onPointerCancel={handleBlockPointerEnd}
+                        onClick={() => handleSelectBlock(block)}
                         className={moveButtonClass}
                       >
                         <span className="flex min-w-0 items-center justify-between gap-3">
@@ -2184,9 +2308,9 @@ export function DailyRoutinesPanel({
                         type="button"
                         aria-label={`Resize end of ${block.title}`}
                         onPointerDown={(event) => startDrag(event, block, "end")}
-                        onPointerMove={(event) => updateDrag(event.clientY)}
-                        onPointerUp={finishDrag}
-                        onPointerCancel={finishDrag}
+                        onPointerMove={handleBlockPointerMove}
+                        onPointerUp={handleBlockPointerEnd}
+                        onPointerCancel={handleBlockPointerEnd}
                         className={`absolute inset-x-0 bottom-0 z-20 touch-none cursor-ns-resize bg-transparent transition-colors hover:bg-white/15 ${resizeHandleClass}`}
                       />
                     </div>
@@ -2474,22 +2598,19 @@ export function DailyRoutinesPanel({
                             >
                               <CheckGlyph />
                             </button>
-                            <input
+                            <SubtaskTitleField
                               key={`${subtask.id}-${subtask.title}`}
-                              defaultValue={subtask.title}
-                              onBlur={(event) =>
+                              value={subtask.title}
+                              completed={completed}
+                              className="px-2 py-1.5 text-sm leading-5"
+                              onSave={(value, field) =>
                                 handleSaveSubtaskTitle(
                                   activeBlock,
                                   subtask,
-                                  event.currentTarget.value,
-                                  event.currentTarget,
+                                  value,
+                                  field,
                                 )
                               }
-                              className={`min-w-0 rounded-sm border border-transparent bg-transparent px-2 py-1.5 text-sm outline-none transition-colors hover:border-white/[0.12] hover:bg-white/[0.035] focus:border-cyan-200/35 focus:bg-white/[0.045] ${
-                                completed
-                                  ? "text-zinc-500 line-through"
-                                  : "text-zinc-100"
-                              }`}
                             />
                             <span className="flex items-center gap-1">
                               <span className="flex sm:hidden">
@@ -2708,6 +2829,183 @@ export function DailyRoutinesPanel({
           </p>
         </div>
       )}
+
+      {mobileSubtaskBlock ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end bg-black/76 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-12 backdrop-blur-sm xl:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mobile-block-subtasks-title"
+          onClick={() => setMobileSubtaskBlockId(null)}
+        >
+          <div
+            className="max-h-[82vh] w-full overflow-y-auto rounded-md border border-white/[0.14] bg-[#080909] shadow-[0_-26px_80px_rgba(0,0,0,0.62)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 border-b border-white/[0.10] bg-[#080909]/96 px-4 py-4 backdrop-blur-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.24em] text-cyan-100/70">
+                    Subtasks
+                  </p>
+                  <h3
+                    id="mobile-block-subtasks-title"
+                    className="truncate text-xl font-semibold text-white"
+                  >
+                    {mobileSubtaskBlock.title}
+                  </h3>
+                  <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+                    {formatMinute(mobileSubtaskBlock.startMinute)} -{" "}
+                    {formatMinute(mobileSubtaskBlock.endMinute)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileSubtaskBlockId(null)}
+                  className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-sm border border-white/[0.16] bg-white/[0.045] font-mono text-lg text-zinc-200 transition-colors hover:border-cyan-200/35 hover:bg-white/[0.08] hover:text-white"
+                  aria-label="Close subtasks"
+                >
+                  x
+                </button>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="rounded-sm border border-white/[0.08] bg-white/[0.035] px-3 py-2">
+                  <p className="font-mono text-[8px] uppercase tracking-[0.18em] text-zinc-500">
+                    Done
+                  </p>
+                  <p className="mt-1 font-mono text-sm text-zinc-100">
+                    {mobileSubtaskCompletedCount} /{" "}
+                    {mobileSubtaskBlock.subtasks.length}
+                  </p>
+                </div>
+                <div className="rounded-sm border border-white/[0.08] bg-white/[0.035] px-3 py-2">
+                  <p className="font-mono text-[8px] uppercase tracking-[0.18em] text-zinc-500">
+                    Length
+                  </p>
+                  <p className="mt-1 font-mono text-sm text-zinc-100">
+                    {formatDuration(
+                      mobileSubtaskBlock.startMinute,
+                      mobileSubtaskBlock.endMinute,
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-4 py-4">
+              <div className="mb-4 flex gap-2">
+                <input
+                  value={mobileSubtaskTitle}
+                  onChange={(event) =>
+                    setNewSubtaskDrafts((current) => ({
+                      ...current,
+                      [mobileSubtaskBlock.blockKey]: event.target.value,
+                    }))
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") handleAddSubtask(mobileSubtaskBlock);
+                  }}
+                  placeholder="Add subtask"
+                  className="min-h-11 min-w-0 flex-1 rounded-sm border border-white/[0.13] bg-[#0d0f10] px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 hover:border-white/22 focus:border-cyan-200/40"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddSubtask(mobileSubtaskBlock)}
+                  disabled={isPending || !mobileSubtaskTitle.trim()}
+                  className="min-h-11 cursor-pointer rounded-sm border border-cyan-200/24 bg-cyan-200/[0.075] px-3 py-2 text-[9px] font-mono uppercase tracking-[0.18em] text-cyan-100 transition-colors hover:border-cyan-100/45 hover:bg-cyan-200/[0.12] disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  Add
+                </button>
+              </div>
+
+              {mobileSubtaskBlock.subtasks.length > 0 ? (
+                <div className="space-y-2">
+                  {mobileSubtaskBlock.subtasks.map((subtask, index) => {
+                    const completed = completedSubtaskIds.includes(subtask.id);
+                    const firstSubtask = index === 0;
+                    const lastSubtask =
+                      index === mobileSubtaskBlock.subtasks.length - 1;
+                    return (
+                      <div
+                        key={subtask.id}
+                        className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-sm border border-white/[0.08] bg-white/[0.025] px-2 py-2.5"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSubtask(subtask)}
+                          className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-sm border text-[12px] transition-colors ${
+                            completed
+                              ? "border-cyan-100/55 bg-cyan-200/15 text-cyan-50"
+                              : "border-white/[0.16] text-transparent hover:border-white/28"
+                          }`}
+                          aria-label={
+                            completed
+                              ? `Mark ${subtask.title} incomplete`
+                              : `Mark ${subtask.title} complete`
+                          }
+                        >
+                          <CheckGlyph />
+                        </button>
+                        <SubtaskTitleField
+                          key={`mobile-${subtask.id}-${subtask.title}`}
+                          value={subtask.title}
+                          completed={completed}
+                          className="px-2 py-2 text-base leading-6"
+                          onSave={(value, field) =>
+                            handleSaveSubtaskTitle(
+                              mobileSubtaskBlock,
+                              subtask,
+                              value,
+                              field,
+                            )
+                          }
+                        />
+                        <span className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleMoveSubtask(mobileSubtaskBlock, subtask, -1)
+                            }
+                            disabled={firstSubtask || isPending}
+                            className="flex h-9 w-8 cursor-pointer items-center justify-center rounded-l-sm border border-white/[0.12] font-mono text-[11px] text-zinc-300 transition-colors hover:border-cyan-200/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-25"
+                            aria-label={`Move ${subtask.title} up`}
+                          >
+                            ^
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleMoveSubtask(mobileSubtaskBlock, subtask, 1)
+                            }
+                            disabled={lastSubtask || isPending}
+                            className="flex h-9 w-8 cursor-pointer items-center justify-center rounded-r-sm border-y border-r border-white/[0.12] font-mono text-[11px] text-zinc-300 transition-colors hover:border-cyan-200/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-25"
+                            aria-label={`Move ${subtask.title} down`}
+                          >
+                            v
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDeleteSubtask(mobileSubtaskBlock, subtask)
+                            }
+                            className="min-h-9 cursor-pointer px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:text-red-200"
+                          >
+                            Del
+                          </button>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-sm border border-white/[0.08] bg-white/[0.025] px-4 py-8 text-center">
+                  <p className="text-sm text-zinc-500">No subtasks yet.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {error ? <p className="mt-4 text-xs font-mono text-red-400/80">{error}</p> : null}
       {notice ? <p className="mt-4 text-xs font-mono text-zinc-500">{notice}</p> : null}

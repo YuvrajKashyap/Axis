@@ -89,17 +89,37 @@ function getFreshWeekCalendar() {
   return cachedWeekCalendar;
 }
 
+function getMsUntilNextLocalDay() {
+  const now = new Date();
+  const nextDay = new Date(now);
+  nextDay.setHours(24, 0, 0, 0);
+  return Math.max(1_000, nextDay.getTime() - now.getTime() + 50);
+}
+
 function subscribeToWeekCalendar(onStoreChange: () => void) {
-  const intervalId = window.setInterval(() => {
+  let timeoutId: number | null = null;
+  const refreshIfDateChanged = () => {
     const previousDateKey = cachedWeekCalendar?.todayDateKey;
     const nextCalendar = buildWeekCalendar();
     if (previousDateKey !== nextCalendar.todayDateKey) {
       cachedWeekCalendar = nextCalendar;
       onStoreChange();
     }
-  }, 60_000);
+  };
+  const scheduleNextLocalDay = () => {
+    timeoutId = window.setTimeout(() => {
+      refreshIfDateChanged();
+      scheduleNextLocalDay();
+    }, getMsUntilNextLocalDay());
+  };
 
-  return () => window.clearInterval(intervalId);
+  const intervalId = window.setInterval(refreshIfDateChanged, 60_000);
+  scheduleNextLocalDay();
+
+  return () => {
+    window.clearInterval(intervalId);
+    if (timeoutId) window.clearTimeout(timeoutId);
+  };
 }
 
 function getServerWeekCalendarSnapshot() {
