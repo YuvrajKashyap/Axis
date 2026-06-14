@@ -1339,7 +1339,7 @@ export async function setDailyRoutineBlockSubtaskCompletion(
           subtask_id: subtaskId,
           date_key: dateKey,
         },
-        { onConflict: "subtask_id,date_key" },
+        { onConflict: "subtask_id,date_key", ignoreDuplicates: true },
       );
 
     if (error) {
