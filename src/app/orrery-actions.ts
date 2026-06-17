@@ -21,6 +21,7 @@ type ForceAlignDomainsResult =
   | { success: false; error: string };
 
 const FORCE_ALIGNMENT_COMMITMENT_TEXT = "Forced alignment.";
+const FORCE_ALIGNMENT_ORDER_STEP_MS = 1;
 
 export async function updateOrbit(
   domainId: string,
@@ -106,17 +107,34 @@ export async function forceAlignDomains(
     return { success: false, error: loadError.message };
   }
 
-  const domains = (data ?? []) as ForceAlignDomainRow[];
-  if (domains.length === 0) {
+  const loadedDomains = (data ?? []) as ForceAlignDomainRow[];
+  const domainsById = new Map(
+    loadedDomains.map((domain) => [domain.id, domain]),
+  );
+  const orderedDomains = uniqueDomainIds
+    .map((domainId) => domainsById.get(domainId))
+    .filter((domain): domain is ForceAlignDomainRow => Boolean(domain));
+
+  if (orderedDomains.length === 0) {
     return { success: false, error: "No matching planets found." };
   }
 
-  const alignedAt = new Date();
-  const alignedAtIso = alignedAt.toISOString();
-  const standardDomains = domains.filter(
+  const lastAlignmentMs = Date.now();
+  const firstAlignmentMs =
+    lastAlignmentMs -
+    Math.max(0, orderedDomains.length - 1) * FORCE_ALIGNMENT_ORDER_STEP_MS;
+  const alignmentDatesByDomainId = new Map(
+    orderedDomains.map((domain, index) => [
+      domain.id,
+      new Date(firstAlignmentMs + index * FORCE_ALIGNMENT_ORDER_STEP_MS),
+    ]),
+  );
+  const getAlignmentDate = (domainId: string) =>
+    alignmentDatesByDomainId.get(domainId) ?? new Date(lastAlignmentMs);
+  const standardDomains = orderedDomains.filter(
     (domain) => (domain.commitment_requirement ?? "STANDARD") === "STANDARD",
   );
-  const passiveLikeDomains = domains.filter(
+  const passiveLikeDomains = orderedDomains.filter(
     (domain) => (domain.commitment_requirement ?? "STANDARD") !== "STANDARD",
   );
 
@@ -125,45 +143,49 @@ export async function forceAlignDomains(
       .schema("axis")
       .from("commitments")
       .insert(
-        standardDomains.map((domain) => ({
-          domain_id: domain.id,
-          user_id: userId,
-          text: FORCE_ALIGNMENT_COMMITMENT_TEXT,
-        })),
+        standardDomains.map((domain) => {
+          const alignmentAtIso = getAlignmentDate(domain.id).toISOString();
+          return {
+            domain_id: domain.id,
+            user_id: userId,
+            text: FORCE_ALIGNMENT_COMMITMENT_TEXT,
+            created_at: alignmentAtIso,
+            updated_at: alignmentAtIso,
+          };
+        }),
       );
 
     if (insertError) {
       return { success: false, error: insertError.message };
     }
 
-    const { error: updateError } = await supabase
-      .schema("axis")
-      .from("domains")
-      .update({ status: "ALIGNED" })
-      .eq("user_id", userId)
-      .in(
-        "id",
-        standardDomains.map((domain) => domain.id),
-      );
+    for (const domain of standardDomains) {
+      const alignmentAtIso = getAlignmentDate(domain.id).toISOString();
+      const { error: updateError } = await supabase
+        .schema("axis")
+        .from("domains")
+        .update({ status: "ALIGNED", updated_at: alignmentAtIso })
+        .eq("user_id", userId)
+        .eq("id", domain.id);
 
-    if (updateError) {
-      return { success: false, error: updateError.message };
+      if (updateError) {
+        return { success: false, error: updateError.message };
+      }
     }
   }
 
-  if (passiveLikeDomains.length > 0) {
+  for (const domain of passiveLikeDomains) {
+    const alignmentAtIso = getAlignmentDate(domain.id).toISOString();
     const { error: updateError } = await supabase
       .schema("axis")
       .from("domains")
       .update({
         status: "ALIGNED",
-        last_passive_alignment_at: alignedAtIso,
+        last_passive_alignment_at: alignmentAtIso,
+        updated_at: alignmentAtIso,
       })
       .eq("user_id", userId)
-      .in(
-        "id",
-        passiveLikeDomains.map((domain) => domain.id),
-      );
+      .eq("id", domain.id);
 
     if (updateError) {
       return { success: false, error: updateError.message };
@@ -171,19 +193,20 @@ export async function forceAlignDomains(
   }
 
   await Promise.all(
-    domains.map(async (domain) => {
+    orderedDomains.map(async (domain) => {
       try {
         const isStandard =
           (domain.commitment_requirement ?? "STANDARD") === "STANDARD";
+        const alignmentAt = getAlignmentDate(domain.id);
         await scheduleDomainDriftWarning(domain.id, {
           source: isStandard ? "commitment" : "passive-alignment",
           status: "ALIGNED",
           ...(isStandard
             ? {
-                lastCommitmentAt: alignedAt,
+                lastCommitmentAt: alignmentAt,
                 lastCommitmentText: FORCE_ALIGNMENT_COMMITMENT_TEXT,
               }
-            : { lastPassiveAlignmentAt: alignedAt }),
+            : { lastPassiveAlignmentAt: alignmentAt }),
         });
       } catch (error) {
         console.error("Failed to schedule drift warning after force align", {
@@ -195,11 +218,11 @@ export async function forceAlignDomains(
   );
 
   revalidatePath("/");
-  domains.forEach((domain) => revalidatePath(`/domain/${domain.slug}`));
+  orderedDomains.forEach((domain) => revalidatePath(`/domain/${domain.slug}`));
 
   return {
     success: true,
-    alignedDomainIds: domains.map((domain) => domain.id),
+    alignedDomainIds: orderedDomains.map((domain) => domain.id),
   };
 }
 

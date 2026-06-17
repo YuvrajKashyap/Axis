@@ -507,8 +507,8 @@ export function Orrery({
   const [createError, setCreateError] = useState("");
   const [isCreating, startCreateTransition] = useTransition();
   const [forceAlignOpen, setForceAlignOpen] = useState(false);
-  const [selectedForceDomainIds, setSelectedForceDomainIds] = useState<Set<string>>(
-    () => new Set(),
+  const [selectedForceDomainOrder, setSelectedForceDomainOrder] = useState<string[]>(
+    () => [],
   );
   const [forceAlignError, setForceAlignError] = useState("");
   const [isForceAligning, startForceAlignTransition] = useTransition();
@@ -1001,8 +1001,20 @@ export function Orrery({
     ? sortDomainsForMetric(selectedMetricDomains, selectedMetric)
     : [];
   const forceAlignDomainList = sortDomainsForMetric(domains, "TOTAL");
-  const selectedForceDomains = forceAlignDomainList.filter((domain) =>
-    selectedForceDomainIds.has(domain.id),
+  const forceAlignDomainsById = useMemo(
+    () => new Map(forceAlignDomainList.map((domain) => [domain.id, domain])),
+    [forceAlignDomainList],
+  );
+  const selectedForceDomainIds = useMemo(
+    () => new Set(selectedForceDomainOrder),
+    [selectedForceDomainOrder],
+  );
+  const selectedForceDomains = useMemo(
+    () =>
+      selectedForceDomainOrder
+        .map((domainId) => forceAlignDomainsById.get(domainId))
+        .filter((domain): domain is DomainData => Boolean(domain)),
+    [forceAlignDomainsById, selectedForceDomainOrder],
   );
   const batchQuoteRgb = hexToRgb(batchQuoteColor);
   const countSlotWidthCh = Math.max(
@@ -1063,7 +1075,7 @@ export function Orrery({
 
     setSelectedMetric(null);
     setForceAlignError("");
-    setSelectedForceDomainIds(new Set());
+    setSelectedForceDomainOrder([]);
     setForceAlignOpen(true);
   }, [isDemo, router]);
 
@@ -1075,15 +1087,11 @@ export function Orrery({
 
   const toggleForceDomain = useCallback((domainId: string) => {
     setForceAlignError("");
-    setSelectedForceDomainIds((current) => {
-      const next = new Set(current);
-      if (next.has(domainId)) {
-        next.delete(domainId);
-      } else {
-        next.add(domainId);
-      }
-      return next;
-    });
+    setSelectedForceDomainOrder((current) =>
+      current.includes(domainId)
+        ? current.filter((currentDomainId) => currentDomainId !== domainId)
+        : [...current, domainId],
+    );
   }, []);
 
   const selectForcePreset = useCallback(
@@ -1091,7 +1099,7 @@ export function Orrery({
       setForceAlignError("");
 
       if (preset === "CLEAR") {
-        setSelectedForceDomainIds(new Set());
+        setSelectedForceDomainOrder([]);
         return;
       }
 
@@ -1103,15 +1111,13 @@ export function Orrery({
         )
         .map((domain) => domain.id);
 
-      setSelectedForceDomainIds(new Set(nextIds));
+      setSelectedForceDomainOrder(nextIds);
     },
     [forceAlignDomainList],
   );
 
   const handleForceAlign = useCallback(() => {
-    const selectedDomains = forceAlignDomainList.filter((domain) =>
-      selectedForceDomainIds.has(domain.id),
-    );
+    const selectedDomains = selectedForceDomains;
 
     if (selectedDomains.length === 0) {
       setForceAlignError("Choose at least one planet.");
@@ -1136,7 +1142,7 @@ export function Orrery({
       );
 
       setForceAlignOpen(false);
-      setSelectedForceDomainIds(new Set());
+      setSelectedForceDomainOrder([]);
       await startBatchQuote(
         alignedDomains.length > 0 ? alignedDomains : selectedDomains,
       );
@@ -1144,8 +1150,7 @@ export function Orrery({
   }, [
     demoUserId,
     editingDemo,
-    forceAlignDomainList,
-    selectedForceDomainIds,
+    selectedForceDomains,
     startBatchQuote,
     startForceAlignTransition,
   ]);
