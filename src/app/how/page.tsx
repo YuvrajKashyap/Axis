@@ -1,4 +1,35 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "How it works",
+  description:
+    "How Axis turns life domains, drift, and concrete commitments into a short alignment loop.",
+  alternates: {
+    canonical: "/how",
+  },
+  openGraph: {
+    url: "/how",
+    title: "How Axis works",
+    description:
+      "A spatial personal alignment system built around Open, Align, and Execute.",
+    images: [
+      {
+        url: "/showcase/how-it-works.png",
+        width: 1234,
+        height: 712,
+        alt: "The Axis how-it-works page",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "How Axis works",
+    description:
+      "A spatial personal alignment system built around Open, Align, and Execute.",
+    images: ["/showcase/how-it-works.png"],
+  },
+};
 
 export default function HowItWorksPage() {
   return (

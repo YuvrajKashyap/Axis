@@ -1,289 +1,140 @@
+<p align="center">
+  <img src="public/showcase/axis-orrery.png" alt="Axis public-demo orrery with life domains represented as orbiting planets" width="100%" />
+</p>
+
 # Axis
 
-## Live
+**A spatial personal alignment system for seeing drift, choosing the next move, and getting back to action.**
 
-https://axis.yuvrajkashyap.com
+[Open the live demo](https://axis.yuvrajkashyap.com) · [Read how it works](https://axis.yuvrajkashyap.com/how) · [View the case study](docs/CASE_STUDY.md)
 
-Axis is fully deployed and running in production.
-Create an account and use it live.
+> The homepage is a live, read-only public demo. No account is required to inspect the orrery, domain states, and interaction model. An account unlocks the full editing and commitment workflow.
 
+## Why Axis exists
 
+Most productivity software turns life into a feed, a streak, or an ever-growing task list. Axis takes a narrower position: the product should help someone notice what matters, make one concrete commitment, and leave.
 
-A personal alignment system built around life domains, commitments, and execution.
+The core loop is deliberately short:
 
-Axis is not a task manager, habit tracker, or productivity feed. It is designed to help a user quickly regain clarity across the areas of life that matter most, commit to a concrete next action, and leave the app to execute.
+1. **Open** — inspect the system and see what has drifted.
+2. **Align** — choose the next concrete action for the domains that matter now.
+3. **Execute** — close the app and do the work.
 
-Core loop: Open → Align → Execute
+Life domains become planets around a central point. Healthy attention keeps a planet in orbit; neglected domains drift outward; intentionally paused domains remain archived at the edge.
 
-## Why I built it
-
-Most productivity tools optimize for retention, complexity, or organizational sprawl. Axis is built around a different idea:
-
-- represent major life areas as living domains
-- make drift visible
-- reduce each session to one meaningful commitment
-- push the user back into action instead of deeper app usage
-
-The result is a personal operating system centered on alignment, not engagement.
-
-## What the app does
-
-Axis gives each user a personal orrery: a solar-system-inspired interface where domains orbit around a central sun.
-
-From there, users can:
-
-- create and manage life domains
-- visually inspect domain status and drift
-- open a domain and write a one-line commitment
-- use a guided reset flow across multiple domains
-- return to action immediately after committing
-
-It is intentionally minimal:
-
-- no feeds
-- no notifications
-- no streaks
-- no gamification
-- no generic dashboard clutter
-
-## Core user experience
-
-### Homepage / Orrery
-
-After signing in, users land on a personalized orrery showing their domains as planets orbiting a central sun.
-
-The homepage supports:
-
-- clicking a domain to enter its detail page
-- dragging active planets to adjust orbit radius
-- resetting active orbits from the sun
-- keyboard navigation
-- starting an alignment flow across domains
-
-### Domain detail
-
-Each domain has a dedicated page with:
-
-- name
-- identity
-- vision
-- primary reason
-- primary cost
-- color
-- status
-- commitment input
-- recent commitment history
-
-Users can also edit the domain directly from this view.
-
-### Commitment flow
-
-The core interaction is a single action input:
-
-Today I will...
-
-Submitting a commitment triggers a full-screen quote overlay and routes the user either:
-
-- back to the homepage
-- to the next domain in the alignment chain
-
-### Reset flow
-
-Axis includes a guided reset flow at /reset that steps through all non-archived domains one at a time, allowing the user to enter a commitment for each.
-
-## Features
-
-### User system
-
-- email and password sign up
-- email and password sign in
-- per-user data isolation
-- JWT-based session handling via Auth.js
-
-### Domain system
-
-- create domains from homepage
-- per-user slugs
-- rename and delete domains
-- edit identity, vision, primary reason, primary cost
-- set color and status
-- status types: ALIGNED, DRIFTING, ARCHIVED
+## Product tour
 
 ### Orrery
 
-- animated solar-system UI
-- draggable planets with persisted orbit radius
-- orbit reset from the sun
-- visual distinction between domain states
-- automatic drift based on latest commitment
+The homepage turns domain state into a spatial interface instead of another dashboard. Planets animate at configurable speeds, accept drag-based orbit changes, expose keyboard navigation, and visually separate aligned, drifting, and archived work.
 
-### Commitments
+### Domain alignment
 
-- create one-line commitments
-- view history
-- clear history
-- batch submission through reset flow
+Each domain holds an identity, vision, reason, cost, status, color, drift policy, and a concrete next move. A commitment brings a drifting planet back into the active system.
 
-### Alignment
+### Align many
 
-- Align entrypoint from homepage
-- sequential domain flow
-- one commitment per domain
+A guided reset can move through several domains in a chosen order. This preserves the product's single-action focus while making a whole-system reset practical.
 
-### Demo + admin
+### Daily execution
 
-- public demo mode
-- internal demo user
-- admin-only edit path
+The Daily surface connects alignment to execution with weekday checklists, reusable routines, time blocks, linked focus items, subtasks, and per-day routine selection.
 
-### Design exploration
+### Drift warnings
 
-- /designs/*
-- /domaindesign/*
-- /signupdesign/*
+Per-domain drift thresholds can schedule signed QStash callbacks. Resend delivers warning emails only after the callback re-checks the expected activity state, avoiding stale notifications after a user has already realigned.
 
-## Tech stack
+## What makes the build interesting
 
-- Next.js 16 App Router
-- TypeScript
-- React 19
-- Tailwind CSS 4
-- PostgreSQL
-- Prisma ORM
-- Auth.js credentials auth
-- bcryptjs
-- Geist + Playfair fonts
+- **A real spatial UI** — the orrery uses DOM transforms and `requestAnimationFrame`, with separate visual states, persisted orbit radii, and responsive mobile/desktop interaction paths.
+- **Per-user isolation** — Supabase Auth identifies the user; application queries are scoped by `user_id`; Postgres row-level security adds a second boundary.
+- **State derived from time** — effective drift is computed from policy, recent activity, commitment mode, and passive alignment instead of stored as a fragile UI-only flag.
+- **Signed asynchronous work** — drift warnings use verified QStash callbacks and revalidation before email delivery.
+- **Demo resilience** — production reads a curated public-demo RPC, with a bundled read-only orrery as a graceful fallback during a transient data outage.
+- **Incremental schema evolution** — the `sql/` directory captures additive domain settings, subtasks, daily alignment, routine blocks, and RLS policies.
 
 ## Architecture
 
-- App Router structure under src/app
-- server components for data loading
-- client components for UI
-- server actions for mutations
-- Prisma used directly
-- global Prisma singleton
-- route-level mutation handling
+```mermaid
+flowchart LR
+  B[Browser] --> N[Next.js 16 App Router]
+  N --> A[Supabase Auth]
+  N --> P[(Supabase Postgres\naxis schema + RLS)]
+  N --> Q[QStash]
+  Q --> W[Signed drift-warning callback]
+  W --> P
+  W --> R[Resend]
+```
 
-### Routes
+Server Components load user-scoped state. Client Components own animation and high-frequency interaction. Server Actions validate ownership before mutations, then revalidate the affected route.
 
-- / homepage
-- /login auth
-- /domain/[slug] domain detail
-- /reset reset flow
-- /how product explanation
-- /designs/* UI experiments
+## Stack
 
-## Database
+- Next.js 16, React 19, TypeScript
+- Tailwind CSS 4 and purpose-built CSS for the orrery
+- Supabase Auth, Postgres, RPCs, and row-level security
+- Prisma schema tooling for the retained relational model
+- QStash for scheduled callbacks
+- Resend for transactional email
+- Vercel Analytics and Vercel deployment
 
-### User
-- id, email, password, name, timestamps
+## Run locally
 
-### Domain
-- userId, name, slug
-- identity, vision
-- primaryReason, primaryCost
-- nextMove, currentReality, standard, proof
-- color, status
-- positionX, positionY, positionZ
+Requirements: Node.js 22+ and a Supabase project with the Axis schema applied.
 
-Unique: userId + slug
-
-### Commitment
-- userId, domainId, text, completed, timestamps
-
-### UserSettings
-- theme
-
-## Auth
-
-- credentials-based auth
-- JWT sessions
-- session.user.id from token
-
-### Isolation
-
-- queries scoped by userId
-- domain access scoped by userId + slug
-- write actions verify ownership
-- reset flow validates domain ownership
-
-## Security
-
-App enforces user scoping at the application layer. Database-level policies should be configured for full production hardening.
-
-## Local setup
-
-Install:
+```bash
+git clone https://github.com/YuvrajKashyap/Axis.git
+cd Axis
 npm install
-
-Env:
-DATABASE_URL=your_postgres_connection_string
-AUTH_SECRET=your_auth_secret
-ADMIN_EMAIL=optional
-
-Prisma:
-npx prisma generate
-npx prisma migrate deploy
-
-Optional seed:
-npm run seed
-
-Run:
+cp .env.example .env.local
 npm run dev
+```
 
-Build:
+On PowerShell, use `Copy-Item .env.example .env.local` instead of `cp` if needed.
+
+The minimum runtime variables are:
+
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+```
+
+`SUPABASE_SERVICE_ROLE_KEY`, QStash, and Resend variables enable privileged auth-email and drift-warning paths. `ADMIN_EMAIL` and `DEMO_USER_ID` enable the curated demo-editing workflow. See [.env.example](.env.example) for the complete list.
+
+## Quality gates
+
+```bash
+npm run check
 npm run build
+```
 
-## Deployment
+`npm run check` runs ESLint, TypeScript without emit, and Prisma schema validation. GitHub Actions repeats those checks and performs a clean production build on every push and pull request.
 
-Required env vars:
+## Repository map
 
-- DATABASE_URL
-- AUTH_SECRET
-- ADMIN_EMAIL optional
+```text
+src/app/Orrery.tsx           spatial homepage and interaction model
+src/app/domain/[slug]/       domain alignment and settings
+src/app/daily/               daily checklists and routine builder
+src/lib/drift.ts             effective drift calculation
+src/lib/drift-warning.ts     scheduling, verification, and email delivery
+src/lib/supabase-*.ts        browser, server, and admin clients
+sql/                         Supabase schema evolution and RLS policies
+public/showcase/             recruiter-facing product visuals
+docs/CASE_STUDY.md           product and engineering decisions
+```
 
-Apply migrations:
-npx prisma migrate deploy
+## Security notes
 
-## Notable details
-
-- orrery built with DOM and requestAnimationFrame
-- orbit persistence
-- drift computed dynamically
-- quote overlay after commit
-- align flow uses query state
-- multi-user via relational ownership
-
-## Limitations
-
-- some schema fields unused in UI
-- design routes exist in production
-- no automated tests
-- some personalized copy remains
-- some sandbox routes query live data
+- Authenticated reads and writes are scoped to the current user.
+- Admin demo editing is limited to the configured demo user.
+- Service-role access stays server-side.
+- QStash callbacks reject invalid signatures.
+- The public demo is read-only and loads through a constrained RPC.
+- Secrets and local environment files are ignored; only `.env.example` is committed.
 
 ## Status
 
-Axis is a fully shipped full-stack product with:
+Axis is a shipped, actively evolved full-stack product. The public demo, authentication, domains, alignment flows, daily routines, persistence, scheduled drift warnings, analytics, and production deployment are all live.
 
-- auth
-- multi-user system
-- database persistence
-- interactive UI
-- reset system
-- production deployment
-
-Represents full lifecycle:
-
-- idea
-- spec
-- architecture
-- UI exploration
-- build
-- auth
-- database
-- deployment
-
-## License
-
-Private project unless otherwise specified.
+For the deeper product rationale, tradeoffs, and implementation notes, read the [case study](docs/CASE_STUDY.md).

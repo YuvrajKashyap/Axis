@@ -6,11 +6,19 @@ import {
   type DomainListItem,
 } from "@/lib/get-data";
 import { normalizeDomainSettings } from "@/lib/domain-settings";
+import { DEMO_DOMAINS } from "@/lib/demo-data";
 import { getPublicDemoOrrery } from "@/lib/get-public-demo";
 import { restoreLegacyIfNeededForCurrentUser } from "@/lib/restore-legacy";
 import { getSupabaseUser } from "@/lib/supabase-auth";
+import type { Metadata } from "next";
 import { Orrery } from "./Orrery";
 import type { DomainData } from "./Orrery";
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "/",
+  },
+};
 
 function toOrreryData(domains: DomainList): DomainData[] {
   return domains.map((domain: DomainListItem) => ({
@@ -51,7 +59,16 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const { demo, pulseDomain } = await searchParams;
 
   if (!user) {
-    const demoDomains = await getPublicDemoOrrery();
+    let demoDomains = DEMO_DOMAINS;
+
+    try {
+      demoDomains = await getPublicDemoOrrery();
+    } catch (error) {
+      console.warn(
+        "Falling back to the bundled public demo because the live demo data could not be loaded.",
+        error,
+      );
+    }
 
     return (
       <Orrery
