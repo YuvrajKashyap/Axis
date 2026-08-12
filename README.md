@@ -120,7 +120,7 @@ src/lib/drift.ts             effective drift calculation
 src/lib/drift-warning.ts     scheduling, verification, and email delivery
 src/lib/supabase-*.ts        browser, server, and admin clients
 sql/                         Supabase schema evolution and RLS policies
-public/showcase/             recruiter-facing product visuals
+public/showcase/             public-facing product visuals
 docs/CASE_STUDY.md           product and engineering decisions
 ```
 
